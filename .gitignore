@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# OCI Functions
+.fn/
+
+# Local test data
+rag/
+ingest/
+
+# Diagnostic logs
+*.txt
+!requirements.txt

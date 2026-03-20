@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+rag/
+PLAN.md
+quickstart.py
+.dockerignore
+.gitignore
+.fn/
+docker-*.txt
+wsl-*.txt
+backend-log.txt
+dd-log.txt
+test-write.txt
