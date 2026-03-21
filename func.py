@@ -16,7 +16,7 @@ from oci.generative_ai_inference.models import (
 
 logger = logging.getLogger(__name__)
 
-COMPARTMENT_ID = "ocid1.compartment.oc1..aaaaaaaamxleq3holrutfb7hih7u4nq42mam77a3ye6m5ufgaqx4itdfxr6a"
+COMPARTMENT_ID = "type compartment ID here"
 REGION = "us-phoenix-1"
 BUCKET_NAME = "agent-knowledge-base"
 NAMESPACE = "axzkbtajofjq"
