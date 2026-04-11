@@ -23,6 +23,14 @@ import {
   registerItemCheck,
 } from "./tools/domain.js";
 
+// Tool registrations — AP/GL Integrity tools (R047001A)
+import {
+  registerApVoucherQuery,
+  registerGlBalanceQuery,
+  registerGlDetailQuery,
+  registerApGlIntegrityCheck,
+} from "./tools/integrity.js";
+
 // Tool registrations — Generic orchestration (escape hatch)
 import { registerOrchestrationTool } from "./tools/orchestration.js";
 
@@ -52,6 +60,12 @@ registerCreateSalesOrder(server);      // CREATE — jde_create_sales_order
 registerUpdateSalesOrder(server);      // UPDATE — jde_update_sales_order
 registerAddSalesOrderLine(server);     // ADD    — jde_add_sales_order_line
 registerCancelSalesOrder(server);      // DELETE — jde_cancel_sales_order
+
+// ── Layer 2.5: AP/GL Integrity (curated for R047001A) ────────
+registerApVoucherQuery(server);        // jde_ap_voucher_query
+registerGlBalanceQuery(server);        // jde_gl_balance_query
+registerGlDetailQuery(server);         // jde_gl_detail_query
+registerApGlIntegrityCheck(server);    // jde_ap_gl_integrity_check
 
 // ── Layer 3: Supporting lookups ───────────────────────────────
 registerCustomerLookup(server);        // jde_customer_lookup

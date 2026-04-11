@@ -3,6 +3,9 @@
 __pycache__/
 *.pyc
 
+# Environment files (contain credentials)
+.env
+
 # OCI Functions
 .fn/
 
