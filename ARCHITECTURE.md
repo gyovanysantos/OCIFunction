@@ -1,7 +1,9 @@
 # JDE Integrity Report AI Analyzer — Architecture Document
 
-> **Version**: 1.0 | **Date**: March 19, 2026 | **Status**: Production  
-> **Repository**: `OCIFunction/` | **Region**: us-phoenix-1 (OCI Phoenix)
+> **Version**: 2.0 | **Date**: April 11, 2025 | **Status**: In Development  
+> **Repository**: `OCIFunction/` | **Regions**: us-phoenix-1 (OCI), Azure (Foundry)  
+> **v1.0 (OCI Function)**: Production — direct LLM inference fallback  
+> **v2.0 (Multi-Agent)**: Development — Foundry agents with MCP-powered JDE verification
 
 ---
 
@@ -21,6 +23,13 @@
 12. [Future Enhancements](#12-future-enhancements)
     - 12.1 [Next Step: Migrate to OCI Container Instances](#121-next-step-migrate-to-oci-container-instances-recommended)
     - 12.2 [Other Enhancements](#122-other-enhancements)
+13. [Multi-Agent Architecture (v2.0)](#13-multi-agent-architecture-v20)
+    - 13.1 [Architecture Diagram](#131-architecture-diagram)
+    - 13.2 [Agent Descriptions](#132-agent-descriptions)
+    - 13.3 [JDE MCP Server Enhancement](#133-jde-mcp-server-enhancement)
+    - 13.4 [Workflow](#134-workflow)
+    - 13.5 [Deployment Topology](#135-deployment-topology)
+    - 13.6 [v2.0 Codebase Structure](#136-v20-codebase-structure)
 
 ---
 
@@ -497,3 +506,210 @@ The current OCI Functions architecture is ideal for a proof of concept, but the 
 ---
 
 *This document describes the architecture as of v0.0.29 deployed on March 19, 2026.*
+
+---
+
+## 13. Multi-Agent Architecture (v2.0)
+
+> **Status**: Deployed (MCP) / In Development (Agents) | **Target**: Foundry Agent Service (Azure) + JDE MCP Server (Azure Container Apps)
+
+v2.0 evolves the single-script PDF→LLM pipeline into a **multi-agent architecture** using Microsoft Foundry Agent Framework. Instead of one GenAI call that reads the PDF and produces an analysis, the system now splits into two specialized agents that work sequentially.
+
+**Key improvement**: The AnalyzerAgent can **query live JDE data** via MCP tools to cross-reference the PDF findings, producing far more accurate and actionable analysis than v1.0's LLM-only approach.
+
+### 13.1 Architecture Diagram
+
+```
+                    ┌───────────────────────────────┐
+                    │   Foundry Agent Service        │
+                    │   Sequential Workflow           │
+                    │   (ExtractorAgent → Analyzer)   │
+                    └─────────────┬─────────────────┘
+                                  │
+                     ┌────────────┼─────────────┐
+                     │                          │
+              ┌──────▼──────┐           ┌───────▼───────┐
+              │  Extractor  │──struct──▶│   Analyzer    │
+              │   Agent     │  JSON     │     Agent     │
+              │ (PDF→data)  │           │  (MCP tools)  │
+              └──────┬──────┘           └───────┬───────┘
+                     │                          │
+              ┌──────▼──────┐           ┌───────▼───────┐
+              │ OCI Object  │           │  JDE MCP      │
+              │  Storage    │           │  Server       │
+              │ (bucket)    │           │ (Azure CApps) │
+              └─────────────┘           └───────┬───────┘
+                                                │
+                                         ┌──────▼──────┐
+                                         │  JDE AIS    │
+                                         │ REST API    │
+                                         │ F0411,F0902 │
+                                         │ F0901       │
+                                         └─────────────┘
+```
+
+### 13.2 Agent Descriptions
+
+| Agent | Purpose | Tools | Technology |
+|-------|---------|-------|------------|
+| **ExtractorAgent** | Downloads PDF from OCI Object Storage, extracts text with `pypdf`, uses LLM to produce structured JSON (report type, company, discrepancies, accounts) | `download_and_extract_pdf` (FunctionTool) | Python, OCI SDK, pypdf |
+| **AnalyzerAgent** | Receives structured extraction, queries live JDE data via MCP tools, cross-references PDF findings, produces verified analysis with recommendations | 4 MCP tools (see §13.3) | Python, McpTool → JDE MCP Server |
+
+**ExtractorAgent output schema:**
+```json
+{
+  "report_type": "R047001A",
+  "has_data": true,
+  "company": "00060",
+  "fiscal_year": 25,
+  "periods": [1, 2, 3],
+  "discrepancies": [
+    {
+      "gl_offset": "PA",
+      "account": "1110",
+      "ap_amount": 123456.78,
+      "gl_amount": 123400.00,
+      "difference": 56.78
+    }
+  ]
+}
+```
+
+### 13.3 JDE MCP Server Enhancement
+
+The existing JDE MCP server (TypeScript, `jde-mcp-server-template/`) was enhanced with 4 new **curated integrity tools** and 3 new table definitions:
+
+**New Tables (dictionary.json v1.2.0):**
+
+| Table | Description | Key Columns |
+|-------|-------------|-------------|
+| **F0411** | A/P Ledger (voucher pay items) | DOC, DCT, AN8, AG, AAP, GLPT, AID, FY, PN |
+| **F0902** | Account Balances (period amounts) | AID, OBJ, SUB, LT, FY, AN01-AN14, BORG |
+| **F0901** | Account Ledger (journal entries) | AID, DOC, DCT, AA, DGJ, AN8, JELN |
+
+**New MCP Tools (integrity.ts):**
+
+| Tool | Table | Purpose |
+|------|-------|---------|
+| `jde_ap_voucher_query` | F0411 | Query AP vouchers by company, supplier, GLPT, dates |
+| `jde_gl_balance_query` | F0902 | Query GL balances by account, ledger type, fiscal year |
+| `jde_gl_detail_query` | F0901 | Drill-down into individual GL journal entries |
+| `jde_ap_gl_integrity_check` | F0411 + F0902 | **Programmatic R047001A** — sums F0411 by GLPT, compares against F0902 balances |
+
+The `jde_ap_gl_integrity_check` tool is the centerpiece — it performs the same reconciliation logic as the JDE R047001A report, but programmatically, returning `{ matches, discrepancies, summary }`.
+
+### 13.4 Workflow
+
+The workflow is a **sequential graph** built with `WorkflowBuilder`:
+
+```
+Input (object_name) → ExtractorAgent → structured JSON → AnalyzerAgent → final report
+```
+
+1. **Input**: User provides `object_name` (PDF filename in OCI bucket)
+2. **ExtractorAgent**: Calls `download_and_extract_pdf` tool → LLM produces structured JSON extraction
+3. **AnalyzerAgent**: Receives JSON → calls `jde_ap_gl_integrity_check` and other MCP tools → cross-references PDF findings against live data → produces verified analysis
+4. **Output**: Structured analysis with confirmed/resolved/new issues and recommendations
+
+### 13.5 Deployment Topology
+
+| Component | Platform | Transport | Auth | URL |
+|-----------|----------|-----------|------|-----|
+| **API Wrapper** | Azure Container Apps (`jde-integrity-api`) | HTTP POST `/v1/analyze` | Static Azure AD token (see caveat below) | `https://jde-integrity-api.bluedesert-fb732cac.eastus.azurecontainerapps.io` |
+| **JDE MCP Server** | Azure Container Apps (`jde-mcp-integrity`) | HTTP POST `/mcp` | Unauthenticated (public) | `https://jde-mcp-integrity.bluedesert-fb732cac.eastus.azurecontainerapps.io` |
+| **JDE AIS** | On-prem / OCI | HTTP REST | Basic Auth (via AIS connector) | Configured via env vars |
+| **OCI Object Storage** | OCI (us-phoenix-1) | OCI SDK | Base64-encoded PEM key (Container App secret) | — |
+| **OCI Function (v1.0 fallback)** | OCI Functions | HTTP via API Gateway | Resource Principal | — |
+
+**Azure Infrastructure**:
+- ACR: `acrjdemcppo.azurecr.io`
+  - `jde-mcp-integrity:v1` — MCP server image
+  - `jde-integrity-api:v5` — API wrapper image
+- Container Apps Environment: `jde-mcp-env` (East US)
+- Resource Group: `rg-hackathon-2603` (subscription: CLSandbox2)
+- API Managed Identity Principal: `8468895c-7fcc-43dc-aceb-ce7dd2412572`
+
+#### ⚠️ Auth Caveat — Foundry Token
+
+The API wrapper container (`jde-integrity-api`) authenticates to Azure AI Foundry using a **static Azure AD token** (`FOUNDRY_TOKEN` env var). This token **expires in ~1 hour** and must be refreshed manually:
+
+```bash
+# Refresh token from Azure CLI
+token=$(az account get-access-token --resource "https://ai.azure.com" --query accessToken -o tsv)
+az containerapp update --name jde-integrity-api --resource-group rg-hackathon-2603 \
+  --set-env-vars "FOUNDRY_TOKEN=$token" --revision-suffix "refresh-$(date +%s)"
+```
+
+**Why**: The Container App has a system-assigned managed identity, but the user's account lacks `Microsoft.Authorization/roleAssignments/write` permission in this sandbox subscription to assign `Azure AI User` role.
+
+**Permanent fix**: An **Owner** or **User Access Administrator** must run:
+```bash
+az role assignment create \
+  --assignee 8468895c-7fcc-43dc-aceb-ce7dd2412572 \
+  --role "Azure AI User" \
+  --scope /subscriptions/74528fbf-d0fa-4d72-b3ef-dee45c2a8293/resourceGroups/rg-hackathon-2603
+```
+Then remove `FOUNDRY_TOKEN` env var — the container will use `DefaultAzureCredential` → managed identity automatically.
+
+#### OCI Auth in Container
+
+The ExtractorAgent in the container authenticates to OCI Object Storage using env vars instead of `~/.oci/config`:
+
+| Env Var | Source | Stored As |
+|---------|--------|-----------|
+| `OCI_USER` | OCI config `user=` | Plain env var |
+| `OCI_FINGERPRINT` | OCI config `fingerprint=` | Plain env var |
+| `OCI_TENANCY` | OCI config `tenancy=` | Plain env var |
+| `OCI_REGION` | OCI config `region=` | Plain env var |
+| `OCI_KEY_CONTENT` | PEM key file (base64-encoded) | Container App secret (`oci-key-content`) |
+
+The `extractor/agent.py` `_get_oci_config()` function decodes the base64 key and constructs an OCI config dict.
+
+### 13.6 v2.0 Codebase Structure
+
+```
+OCIFunction/
+├── func.py                          # v1.0 OCI Function handler (production fallback)
+├── quickstart.py                    # v1.0 Local dev/test (api_key auth)
+├── requirements.txt                 # v1.0 Python deps (fdk, oci, pypdf)
+├── Dockerfile                       # v1.0 OCI Function container
+├── func.yaml                        # v1.0 Function metadata
+├── docker-compose.yml               # v2.0 Local dev: 3 services (mcp, extractor, analyzer)
+├── .env.example                     # v2.0 Root env template for docker-compose
+│
+├── agents/                          # v2.0 Foundry Multi-Agent System
+│   ├── api.py                       # FastAPI wrapper (POST /v1/analyze, GET /health)
+│   ├── app.py                       # Workflow entry point (sequential orchestration)
+│   ├── workflow.py                  # Sequential workflow: Extractor → Analyzer
+│   ├── Dockerfile.api               # API wrapper container (python:3.12-slim, port 8080)
+│   ├── requirements-api.txt         # API deps (fastapi, uvicorn + agent deps)
+│   ├── extractor/
+│   │   ├── agent.py                 # ExtractorAgent: PDF download + text extraction
+│   │   ├── app.py                   # Standalone HTTP entry point (port 8088)
+│   │   ├── Dockerfile               # Container (python:3.12-slim)
+│   │   └── requirements.txt         # Deps: oci, pypdf, agent-framework
+│   ├── analyzer/
+│   │   ├── agent.py                 # AnalyzerAgent: MCP tools + cross-reference
+│   │   ├── app.py                   # Standalone HTTP entry point (port 8088)
+│   │   ├── Dockerfile               # Container (python:3.12-slim)
+│   │   └── requirements.txt         # Deps: agent-framework (no oci/pypdf)
+│   ├── requirements.txt             # v2.0 Python deps (agent-framework, azure-identity)
+│   ├── agent.yaml                   # Foundry agent metadata
+│   ├── Dockerfile                   # v2.0 workflow container (python:3.12-slim, port 8088)
+│   └── .env                         # Environment variables (production MCP URL)
+│
+├── jde-mcp-server-template/         # JDE MCP Server (git subtree)
+│   └── src/
+│       ├── tools/integrity.ts       # 4 new AP/GL integrity tools
+│       ├── schemas/tools.ts         # Zod schemas (including new integrity schemas)
+│       ├── data/dictionary.json     # v1.2.0 — added F0411, F0902, F0901
+│       └── index.ts                 # Tool registration (includes integrity layer)
+│
+├── ARCHITECTURE.md                  # This document
+├── PLAN.md                          # Project log and decision record
+└── ingest/                          # Sample report PDFs for testing
+```
+
+---
+
+*v2.0 architecture documented on April 11, 2025. MCP deployed to Azure Container Apps on April 11, 2026.*

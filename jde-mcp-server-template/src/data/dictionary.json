@@ -1,7 +1,7 @@
 {
-  "version": "1.1.0",
-  "lastUpdated": "2026-04-03",
-  "scope": "Sales Orders — full CRUD lifecycle",
+  "version": "1.2.0",
+  "lastUpdated": "2026-04-11",
+  "scope": "Sales Orders (full CRUD) + Accounts Payable / General Ledger Integrity (R047001A)",
   "tables": [
     {
       "tableName": "F4211",
@@ -92,6 +92,86 @@
         { "alias": "LITM",  "name": "2nd Item Number",    "description": "User-facing item number",                     "dataType": "string", "example": "ABC123" },
         { "alias": "MCU",   "name": "Branch/Plant",       "description": "Business unit / branch-plant",                "dataType": "string", "example": "M30" },
         { "alias": "OPC",   "name": "On Hand Quantity",   "description": "Primary quantity on hand",                    "dataType": "number", "example": "250" }
+      ]
+    },
+    {
+      "tableName": "F0411",
+      "displayName": "A/P Ledger",
+      "description": "Accounts Payable voucher table. One row per voucher pay item. Stores supplier invoices, amounts, GL posting codes, payment status. Core table for R047001A (A/P to G/L Integrity by Offset Account).",
+      "functionalArea": "Accounts Payable",
+      "columns": [
+        { "alias": "DOC",   "name": "Document Number",      "description": "Voucher document number",                            "dataType": "number", "example": "12345" },
+        { "alias": "DCT",   "name": "Document Type",        "description": "Document type (PV=Voucher, PM=Manual, P1=Logged)",   "dataType": "string", "example": "PV" },
+        { "alias": "KCO",   "name": "Document Company",     "description": "Company that owns the voucher",                      "dataType": "string", "example": "00001" },
+        { "alias": "SFX",   "name": "Pay Item Suffix",      "description": "Pay item suffix (001, 002, etc.)",                   "dataType": "string", "example": "001" },
+        { "alias": "CO",    "name": "Company",              "description": "Company code",                                       "dataType": "string", "example": "00001" },
+        { "alias": "AN8",   "name": "Supplier Number",      "description": "Address book number of the supplier",                "dataType": "number", "example": "6001" },
+        { "alias": "MCU",   "name": "Business Unit",        "description": "Business unit / cost center",                        "dataType": "string", "example": "1" },
+        { "alias": "AG",    "name": "Gross Amount",         "description": "Gross amount of the voucher pay item",               "dataType": "number", "example": "15000.00" },
+        { "alias": "AAP",   "name": "Open Amount",          "description": "Current open (unpaid) amount",                      "dataType": "number", "example": "15000.00" },
+        { "alias": "PAAP",  "name": "Original Amount",      "description": "Original domestic amount of the pay item",           "dataType": "number", "example": "15000.00" },
+        { "alias": "GLPT",  "name": "GL Offset",            "description": "G/L posting code (offset account). KEY FIELD for R047001A — groups AP vouchers by their GL offset account", "dataType": "string", "example": "IN" },
+        { "alias": "AID",   "name": "Account ID",           "description": "Account ID (links to F0901/F0902 for GL reconciliation)", "dataType": "string", "example": "00001.1110.ACME" },
+        { "alias": "FY",    "name": "Fiscal Year",          "description": "Fiscal year (2-digit, e.g. 26=2026)",                "dataType": "number", "example": "26" },
+        { "alias": "PN",    "name": "Period Number",        "description": "GL period number (1-14)",                            "dataType": "number", "example": "3" },
+        { "alias": "DGJ",   "name": "GL Date",              "description": "General ledger date (Julian)",                       "dataType": "date",   "example": "2026-03-15" },
+        { "alias": "DIV",   "name": "Invoice Date",         "description": "Supplier invoice date (Julian)",                     "dataType": "date",   "example": "2026-03-10" },
+        { "alias": "DDJ",   "name": "Due Date",             "description": "Payment due date (Julian)",                          "dataType": "date",   "example": "2026-04-10" },
+        { "alias": "PST",   "name": "Pay Status",           "description": "Payment status: A=Approved, D=Draft, H=Held, P=Paid, V=Void, X=Cancelled", "dataType": "string", "example": "A" },
+        { "alias": "VINV",  "name": "Supplier Invoice",     "description": "Supplier invoice number",                            "dataType": "string", "example": "INV-2026-0042" }
+      ]
+    },
+    {
+      "tableName": "F0902",
+      "displayName": "Account Balances",
+      "description": "Account balance table. Stores net posting amounts by period for each account/ledger type/fiscal year. Used by R047001A to get the GL side of the integrity check.",
+      "functionalArea": "General Ledger",
+      "columns": [
+        { "alias": "AID",   "name": "Account ID",           "description": "Account ID (structured: company.object.subsidiary)",  "dataType": "string", "example": "00001.1110.ACME" },
+        { "alias": "CO",    "name": "Company",              "description": "Company code",                                       "dataType": "string", "example": "00001" },
+        { "alias": "MCU",   "name": "Business Unit",        "description": "Business unit / cost center",                        "dataType": "string", "example": "1" },
+        { "alias": "OBJ",   "name": "Object Account",       "description": "Object account (natural account, e.g. 1110=AP Trade)", "dataType": "string", "example": "1110" },
+        { "alias": "SUB",   "name": "Subsidiary",           "description": "Subsidiary account (detail level)",                  "dataType": "string", "example": "ACME" },
+        { "alias": "LT",    "name": "Ledger Type",          "description": "Ledger type: AA=Actual, AU=Units, CA=Budget",        "dataType": "string", "example": "AA" },
+        { "alias": "FY",    "name": "Fiscal Year",          "description": "Fiscal year (2-digit)",                              "dataType": "number", "example": "26" },
+        { "alias": "CTRY",  "name": "Century",              "description": "Century (19 or 20)",                                 "dataType": "number", "example": "20" },
+        { "alias": "AN01",  "name": "Period 1 Amount",      "description": "Net posting amount for period 1",                    "dataType": "number", "example": "50000.00" },
+        { "alias": "AN02",  "name": "Period 2 Amount",      "description": "Net posting amount for period 2",                    "dataType": "number", "example": "45000.00" },
+        { "alias": "AN03",  "name": "Period 3 Amount",      "description": "Net posting amount for period 3",                    "dataType": "number", "example": "52000.00" },
+        { "alias": "AN04",  "name": "Period 4 Amount",      "description": "Net posting amount for period 4",                    "dataType": "number", "example": "0" },
+        { "alias": "AN05",  "name": "Period 5 Amount",      "description": "Net posting amount for period 5",                    "dataType": "number", "example": "0" },
+        { "alias": "AN06",  "name": "Period 6 Amount",      "description": "Net posting amount for period 6",                    "dataType": "number", "example": "0" },
+        { "alias": "AN07",  "name": "Period 7 Amount",      "description": "Net posting amount for period 7",                    "dataType": "number", "example": "0" },
+        { "alias": "AN08",  "name": "Period 8 Amount",      "description": "Net posting amount for period 8",                    "dataType": "number", "example": "0" },
+        { "alias": "AN09",  "name": "Period 9 Amount",      "description": "Net posting amount for period 9",                    "dataType": "number", "example": "0" },
+        { "alias": "AN10",  "name": "Period 10 Amount",     "description": "Net posting amount for period 10",                   "dataType": "number", "example": "0" },
+        { "alias": "AN11",  "name": "Period 11 Amount",     "description": "Net posting amount for period 11",                   "dataType": "number", "example": "0" },
+        { "alias": "AN12",  "name": "Period 12 Amount",     "description": "Net posting amount for period 12",                   "dataType": "number", "example": "0" },
+        { "alias": "AN13",  "name": "Period 13 Amount",     "description": "Net posting amount for period 13 (adjustments)",     "dataType": "number", "example": "0" },
+        { "alias": "AN14",  "name": "Period 14 Amount",     "description": "Net posting amount for period 14 (adjustments)",     "dataType": "number", "example": "0" },
+        { "alias": "BORG",  "name": "Beginning Balance",    "description": "Beginning balance for the fiscal year",              "dataType": "number", "example": "100000.00" }
+      ]
+    },
+    {
+      "tableName": "F0901",
+      "displayName": "Account Ledger",
+      "description": "Account ledger (journal entry detail). One row per GL transaction. Used for drill-down when R047001A discrepancies are found — shows the individual journal entries that make up the GL balance.",
+      "functionalArea": "General Ledger",
+      "columns": [
+        { "alias": "AID",   "name": "Account ID",           "description": "Account ID (structured: company.object.subsidiary)",  "dataType": "string", "example": "00001.1110.ACME" },
+        { "alias": "DOC",   "name": "Document Number",      "description": "Journal entry document number",                      "dataType": "number", "example": "12345" },
+        { "alias": "DCT",   "name": "Document Type",        "description": "Document type (PV=Voucher, JE=Journal Entry, etc.)", "dataType": "string", "example": "PV" },
+        { "alias": "KCO",   "name": "Document Company",     "description": "Company that owns the document",                     "dataType": "string", "example": "00001" },
+        { "alias": "CO",    "name": "Company",              "description": "Company code",                                       "dataType": "string", "example": "00001" },
+        { "alias": "MCU",   "name": "Business Unit",        "description": "Business unit / cost center",                        "dataType": "string", "example": "1" },
+        { "alias": "LT",    "name": "Ledger Type",          "description": "Ledger type (AA=Actual)",                            "dataType": "string", "example": "AA" },
+        { "alias": "FY",    "name": "Fiscal Year",          "description": "Fiscal year (2-digit)",                              "dataType": "number", "example": "26" },
+        { "alias": "PN",    "name": "Period Number",        "description": "GL period number (1-14)",                            "dataType": "number", "example": "3" },
+        { "alias": "AA",    "name": "Amount",               "description": "Transaction amount (positive=debit, negative=credit)", "dataType": "number", "example": "15000.00" },
+        { "alias": "DGJ",   "name": "GL Date",              "description": "General ledger date (Julian)",                       "dataType": "date",   "example": "2026-03-15" },
+        { "alias": "EXR",   "name": "Explanation",          "description": "Explanation / remark for the journal entry",         "dataType": "string", "example": "AP Voucher 12345" },
+        { "alias": "AN8",   "name": "Address Number",       "description": "Address book number (supplier/customer)",             "dataType": "number", "example": "6001" },
+        { "alias": "JELN",  "name": "Journal Entry Line",   "description": "Line number within the journal entry",               "dataType": "number", "example": "1" }
       ]
     }
   ]

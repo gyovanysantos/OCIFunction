@@ -6,6 +6,59 @@ Downloads the PDF directly, extracts text with pypdf, checks for content (code-b
 and sends the full document text to OCI GenAI Inference API (google.gemini-2.5-flash) for analysis.
 No Agent or Knowledge Base — direct LLM inference with the document text in the prompt.
 
+---
+
+## Session Log: 2026-04-11 — Testing, API Wrapper & Cloud Deployment
+
+### What Was Done
+1. **MCP Integration Tests**: Created `tests/test_mcp.py` — 12/12 pass on both Azure and local
+2. **Docker Compose Stack**: All 3 containers (MCP, Extractor, Analyzer) start and run successfully
+3. **Bugs Fixed**:
+   - `FunctionTool` constructor API → use `@tool` decorator instead
+   - `McpTool` doesn't exist → use `MCPStreamableHTTPTool` (rc3 SDK)
+   - MCP `prompts/list` unsupported → `load_prompts=False`
+   - OCI defaults outdated → fixed in agent.py, docker-compose.yml, .env.example
+   - `gpt-4o` deployment removed → updated all configs to `gpt-4.1`
+4. **Security**: Added `.env` to `.gitignore`
+5. **Documentation**: Created `TEST-RESULTS.md`, `DEPLOY-PLAN.md`
+6. **Deployment Plan**: Azure Container Apps deployment plan ready (see `DEPLOY-PLAN.md`)
+7. **End-to-End Workflow Test**: Ran full ExtractorAgent → AnalyzerAgent pipeline from host Python
+   - ExtractorAgent found 6 discrepancies in company 00001
+   - AnalyzerAgent confirmed all large discrepancies resolved in live JDE
+8. **FastAPI Wrapper** (`agents/api.py`): Exposes v1.0 JDE Orchestration contract:
+   - `POST /v1/analyze` → `{"object_name": "..."}` → `{"checkerResponse", "analysisResponse"}`
+   - Per-request agent creation (avoids IMDS timeout blocking startup)
+   - Tested locally on host Python (port 8080) — full pipeline works
+9. **Cloud Deployment to Azure Container Apps**:
+   - Created `agents/Dockerfile.api` (python:3.12-slim, port 8080)
+   - Created `agents/requirements-api.txt` (superset of agent deps + fastapi + uvicorn)
+   - Modified `agents/extractor/agent.py` to support OCI auth via env vars (base64-encoded PEM key)
+   - Built & pushed image `acrjdemcppo.azurecr.io/jde-integrity-api:v5`
+   - Created Container App `jde-integrity-api` in `jde-mcp-env` (East US)
+   - System-assigned managed identity created (principal: `8468895c-7fcc-43dc-aceb-ce7dd2412572`)
+   - OCI private key stored as Container App secret (`oci-key-content`, base64-encoded)
+   - **End-to-end test passed**: `POST /v1/analyze` returns `{checkerResponse: "Yes", analysisResponse: "..."}` from Azure
+
+### ⚠️ Auth Caveat — Static Token (Temporary)
+- The Container App's managed identity needs `Azure AI User` role on the Foundry resource to use `DefaultAzureCredential`
+- The user's account (`gsantos@centrilogic.com`) does **NOT** have `Microsoft.Authorization/roleAssignments/write` permission in this sandbox subscription
+- **Current workaround**: A static Azure AD token is passed via `FOUNDRY_TOKEN` env var — **expires in ~1 hour**
+- **To fix permanently**: Someone with **Owner** or **User Access Administrator** role must run:
+  ```
+  az role assignment create \
+    --assignee 8468895c-7fcc-43dc-aceb-ce7dd2412572 \
+    --role "Azure AI User" \
+    --scope /subscriptions/74528fbf-d0fa-4d72-b3ef-dee45c2a8293/resourceGroups/rg-hackathon-2603
+  ```
+- After that, remove `FOUNDRY_TOKEN` env var — the container will auth via managed identity automatically
+
+### Known Issue: GL Detail Query (F0901)
+- `jde_gl_detail_query` returns AIS error: `SPEC_NOT_FOUND` for `FY` column alias
+- The composite `jde_ap_gl_integrity_check` tool works correctly (uses F0411 + F0902)
+- Fix needed in `jde-mcp-server-template/src/tools/integrity.ts`
+
+---
+
 ## Architecture (v0.0.24 — Direct Inference)
 - Client (REST) → API Gateway → OCI Function (func.py) → Object Storage (download PDF) → pypdf (extract text) → GenAI Inference API (analyze)
 - **Removed**: GenAI Agent, Knowledge Base (RAG), OpenSearch index
@@ -295,3 +348,23 @@ No Agent or Knowledge Base — direct LLM inference with the document text in th
 - Added `max_tokens=4096` to `GenericChatRequest` to allow the full response through.
 - System prompt word cap (850 words) still controls length; `max_tokens` just prevents API-level truncation.
 - Deployed as v0.0.27
+
+---
+
+### 2026-04-11 — MCP Server Deployed to Azure Container Apps (v8)
+
+**Containerization**: Split monolithic workflow into 3 independent containers:
+- `ocifunction-mcp` (265MB) — Node.js 22 Alpine, MCP server, port 3000
+- `ocifunction-extractor` (891MB) — Python 3.12, ExtractorAgent, port 8088
+- `ocifunction-analyzer` (361MB) — Python 3.12, AnalyzerAgent, port 8088
+
+**Docker Compose**: Created `docker-compose.yml` at project root with 3 services for local dev.
+
+**Azure Deployment — MCP Server**:
+- ACR: `acrjdemcppo.azurecr.io/jde-mcp-integrity:v1`
+- Container App: `jde-mcp-integrity` in `jde-mcp-env` environment
+- Resource Group: `rg-hackathon-2603` (CLSandbox2 subscription)
+- FQDN: `https://jde-mcp-integrity.bluedesert-fb732cac.eastus.azurecontainerapps.io`
+- Health check: `/health` → `{"status":"ok","server":"jde-mcp-server","version":"1.1.0"}`
+- MCP endpoint: `/mcp`
+- Updated `agents/.env` with production MCP_SERVER_URL

@@ -230,6 +230,82 @@ export const JdeSearchTablesSchema = z.object({
 }).strict();
 
 // ──────────────────────────────────────────────────────────────
+// AP / GL Integrity Tools (R047001A support)
+// ──────────────────────────────────────────────────────────────
+
+export const JdeApVoucherQuerySchema = z.object({
+  company: z.string().optional()
+    .describe("Company code (CO), e.g. '00001'"),
+  supplierNumber: z.number().int().optional()
+    .describe("Supplier address book number (AN8)"),
+  documentType: z.string().optional()
+    .describe("Document type filter (DCT), e.g. 'PV' for voucher"),
+  payStatus: z.string().optional()
+    .describe("Payment status filter (PST): A=Approved, P=Paid, V=Void, D=Draft, H=Held"),
+  glOffset: z.string().optional()
+    .describe("GL posting code / offset account (GLPT). KEY field for R047001A grouping, e.g. 'IN' for inventory offset"),
+  dateFrom: z.string().optional()
+    .describe("GL date range start (YYYY-MM-DD)"),
+  dateTo: z.string().optional()
+    .describe("GL date range end (YYYY-MM-DD)"),
+  fiscalYear: z.number().int().optional()
+    .describe("Fiscal year filter (FY), e.g. 26 for 2026"),
+  period: z.number().int().min(1).max(14).optional()
+    .describe("GL period filter (PN), 1-14"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeGlBalanceQuerySchema = z.object({
+  company: z.string().optional()
+    .describe("Company code (CO)"),
+  businessUnit: z.string().optional()
+    .describe("Business unit / cost center (MCU)"),
+  objectAccount: z.string().optional()
+    .describe("Object account (OBJ), e.g. '1110' for AP Trade"),
+  subsidiary: z.string().optional()
+    .describe("Subsidiary account (SUB) for detail-level lookup"),
+  ledgerType: z.string().default("AA")
+    .describe("Ledger type: AA=Actual (default), AU=Units, CA=Budget"),
+  fiscalYear: z.number().int().optional()
+    .describe("Fiscal year (FY), e.g. 26 for 2026"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeGlDetailQuerySchema = z.object({
+  accountId: z.string().optional()
+    .describe("Account ID (AID), e.g. '00001.1110.ACME'"),
+  company: z.string().optional()
+    .describe("Company code (CO)"),
+  documentType: z.string().optional()
+    .describe("Document type (DCT), e.g. 'PV', 'JE'"),
+  fiscalYear: z.number().int().optional()
+    .describe("Fiscal year (FY)"),
+  period: z.number().int().min(1).max(14).optional()
+    .describe("GL period (PN), 1-14"),
+  dateFrom: z.string().optional()
+    .describe("GL date range start (YYYY-MM-DD)"),
+  dateTo: z.string().optional()
+    .describe("GL date range end (YYYY-MM-DD)"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeApGlIntegrityCheckSchema = z.object({
+  company: z.string()
+    .describe("Company code (CO). Required for integrity check."),
+  fiscalYear: z.number().int()
+    .describe("Fiscal year to check (FY), e.g. 26 for 2026. Required."),
+  periodFrom: z.number().int().min(1).max(14)
+    .describe("Starting period (PN). Required."),
+  periodTo: z.number().int().min(1).max(14)
+    .describe("Ending period (PN). Required."),
+  glOffset: z.string().optional()
+    .describe("Specific GL offset code (GLPT) to check. Omit to check ALL offset accounts."),
+}).strict();
+
+// ──────────────────────────────────────────────────────────────
 // Inferred types
 // ──────────────────────────────────────────────────────────────
 
@@ -245,3 +321,7 @@ export type JdeItemCheckInput = z.infer<typeof JdeItemCheckSchema>;
 export type JdeCallOrchestrationInput = z.infer<typeof JdeCallOrchestrationSchema>;
 export type JdeDiscoverTableInput = z.infer<typeof JdeDiscoverTableSchema>;
 export type JdeSearchTablesInput = z.infer<typeof JdeSearchTablesSchema>;
+export type JdeApVoucherQueryInput = z.infer<typeof JdeApVoucherQuerySchema>;
+export type JdeGlBalanceQueryInput = z.infer<typeof JdeGlBalanceQuerySchema>;
+export type JdeGlDetailQueryInput = z.infer<typeof JdeGlDetailQuerySchema>;
+export type JdeApGlIntegrityCheckInput = z.infer<typeof JdeApGlIntegrityCheckSchema>;
