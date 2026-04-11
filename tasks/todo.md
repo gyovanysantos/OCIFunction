@@ -21,6 +21,12 @@
 - [x] 3.1 Update `ARCHITECTURE.md` with new multi-agent architecture (v2.0 section added)
 - [x] 3.2 Create `TECH-STACK.md`
 
+## Phase 4: Production Hardening & UX
+
+- [ ] 4.1 Add HTML fancy styling on `analysisResponse` output
+- [ ] 4.2 Implement code in Cantex (JDE orchestration integration)
+- [ ] 4.3 Update Auth/API token in container — assign RBAC to managed identity for permanent auth
+
 ## Review
 
 All 3 phases implemented. Summary of files created/modified:
