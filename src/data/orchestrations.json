@@ -1,0 +1,86 @@
+{
+  "_comment": "Map each Sales Order CRUD operation to its JDE Orchestration name and input field mappings. Update these to match the orchestrations built in YOUR Orchestrator Studio.",
+
+  "createSalesOrder": {
+    "orchestrationName": "ORCH_CreateSalesOrder",
+    "_description": "Creates a new SO header + detail lines via P4210. Should accept header fields and an array of line items.",
+    "inputMapping": {
+      "customerNumber":  "SoldTo",
+      "shipToNumber":    "ShipTo",
+      "branchPlant":     "BranchPlant",
+      "orderType":       "OrderType",
+      "orderDate":       "OrderDate",
+      "requestedDate":   "RequestedDate",
+      "customerPO":      "CustomerPO",
+      "lines":           "OrderLines",
+      "lines[].itemNumber":    "ItemNumber",
+      "lines[].quantity":      "Quantity",
+      "lines[].unitPrice":     "UnitPrice",
+      "lines[].lineType":      "LineType",
+      "lines[].requestedDate": "LineRequestedDate",
+      "lines[].branchPlant":   "LineBranchPlant"
+    },
+    "outputMapping": {
+      "orderNumber": "OrderNumber",
+      "orderType":   "OrderType",
+      "message":     "Message"
+    }
+  },
+
+  "updateSalesOrderLine": {
+    "orchestrationName": "ORCH_UpdateSOLine",
+    "_description": "Updates fields on an existing SO detail line. Uses P4210 EditLine form action.",
+    "inputMapping": {
+      "orderNumber":    "OrderNumber",
+      "orderType":      "OrderType",
+      "orderCompany":   "OrderCompany",
+      "lineNumber":     "LineNumber",
+      "quantity":       "Quantity",
+      "unitPrice":      "UnitPrice",
+      "requestedDate":  "RequestedDate",
+      "promisedDate":   "PromisedDate",
+      "branchPlant":    "BranchPlant"
+    },
+    "outputMapping": {
+      "success": "Success",
+      "message": "Message"
+    }
+  },
+
+  "addSalesOrderLines": {
+    "orchestrationName": "ORCH_AddSOLines",
+    "_description": "Adds new detail lines to an existing SO. Uses P4210 AddLine form action.",
+    "inputMapping": {
+      "orderNumber":          "OrderNumber",
+      "orderType":            "OrderType",
+      "orderCompany":         "OrderCompany",
+      "lines":                "NewLines",
+      "lines[].itemNumber":   "ItemNumber",
+      "lines[].quantity":     "Quantity",
+      "lines[].unitPrice":    "UnitPrice",
+      "lines[].lineType":     "LineType",
+      "lines[].requestedDate":"LineRequestedDate",
+      "lines[].branchPlant":  "LineBranchPlant"
+    },
+    "outputMapping": {
+      "linesAdded": "LinesAdded",
+      "message":    "Message"
+    }
+  },
+
+  "cancelSalesOrder": {
+    "orchestrationName": "ORCH_CancelSO",
+    "_description": "Cancels an entire SO or a specific line. Sets next status to 999 (closed) or applies cancel logic via P4210.",
+    "inputMapping": {
+      "orderNumber":   "OrderNumber",
+      "orderType":     "OrderType",
+      "orderCompany":  "OrderCompany",
+      "lineNumber":    "LineNumber",
+      "cancelReason":  "CancelReason"
+    },
+    "outputMapping": {
+      "success": "Success",
+      "message": "Message"
+    }
+  }
+}

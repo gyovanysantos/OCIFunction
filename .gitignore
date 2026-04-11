@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables & credentials
+.env
+.mcp.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+
+# Logs
+*.log
+container-logs.txt
+
+# Binary/archive files
+*.zip
+*.pdf
+
+# OCI specs (contain credentials)
+container-instance-spec*.json
+api-gateway-spec.json
+gw-spec-*.json
+test-payload.json
