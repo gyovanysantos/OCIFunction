@@ -1,34 +1,12 @@
 """AnalyzerAgent — Cross-references PDF findings against live JDE data via MCP tools.
 
-This agent uses the JDE MCP server to query A/P and G/L tables (F0411, F0902, F0901)
-and verify the discrepancies found in the integrity report PDF.
+This agent uses the JDE MCP server (bridged via mcp_bridge.py) to query
+A/P and G/L tables (F0411, F0902, F0901) and verify the discrepancies
+found in the integrity report PDF.
 
-The MCP tools are configured via MCPTool and connected to the JDE MCP server
-hosted on Azure Container Apps.
+MCP tools are registered as OCI ADK @tool functions in mcp_bridge.py
+which internally call the JDE MCP server via StreamableHTTP.
 """
-import os
-
-from agent_framework import MCPStreamableHTTPTool
-
-# ──────────────────────────────────────────────────────────────
-# MCP Tool configuration
-# ──────────────────────────────────────────────────────────────
-# The MCP server URL should point to your JDE MCP server instance.
-# Local dev: http://localhost:3000/mcp
-# Production: Azure Container Apps URL (e.g. https://<app-name>.<region>.azurecontainerapps.io/mcp)
-
-MCP_TOOL = MCPStreamableHTTPTool(
-    name="jde-mcp-server",
-    url=os.getenv("MCP_SERVER_URL", "http://localhost:3000/mcp"),
-    allowed_tools=[
-        "jde_ap_voucher_query",
-        "jde_gl_balance_query",
-        "jde_gl_detail_query",
-        "jde_ap_gl_integrity_check",
-    ],
-    approval_mode="never_require",
-    load_prompts=False,
-)
 
 
 # ──────────────────────────────────────────────────────────────

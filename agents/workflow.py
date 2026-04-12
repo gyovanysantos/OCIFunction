@@ -1,72 +1,120 @@
-"""Sequential workflow: ExtractorAgent → AnalyzerAgent.
+"""Sequential workflow: ExtractorAgent → AnalyzerAgent using OCI ADK.
 
-The workflow takes a PDF object name as input, runs it through the Extractor
-(PDF → structured data), then passes the result to the Analyzer (structured data
-→ MCP-verified analysis).
+Deterministic workflow pattern: plain Python control flow chaining
+agent.run() calls sequentially. The ADK handles the agent loop
+(LLM reasoning + tool calling) on OCI GenAI Agents Service.
 
 Architecture:
     Input (object_name) → ExtractorAgent → structured JSON → AnalyzerAgent → final report
 """
+import logging
 import os
 
-from azure.identity.aio import DefaultAzureCredential
-from agent_framework import WorkflowBuilder
-from agent_framework.azure import AzureAIClient
+from oci.addons.adk import Agent, AgentClient
 
 from extractor.agent import download_and_extract_pdf, EXTRACTOR_INSTRUCTIONS
-from analyzer.agent import MCP_TOOL, ANALYZER_INSTRUCTIONS
+from mcp_bridge import (
+    jde_ap_voucher_query,
+    jde_gl_balance_query,
+    jde_gl_detail_query,
+    jde_ap_gl_integrity_check,
+)
+from analyzer.agent import ANALYZER_INSTRUCTIONS
+
+logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────────────────────────
+# Module-level agent instances (initialized once, reused)
+# ──────────────────────────────────────────────────────────────
+
+_client: AgentClient | None = None
+_extractor: Agent | None = None
+_analyzer: Agent | None = None
 
 
-async def build_workflow(credential: DefaultAzureCredential):
-    """Build and return the sequential Extractor → Analyzer workflow.
+def _ensure_agents() -> None:
+    """Initialize ADK client and agents on first use.
 
-    Creates two separate AzureAIClient instances (one per agent, as required)
-    and wires them into a graph-based workflow.
-
-    Args:
-        credential: Async Azure credential for authenticating with Foundry.
-
-    Returns:
-        A tuple of (workflow, extractor_ctx, analyzer_ctx) where the ctx objects
-        are the async context managers that must be kept alive.
+    Creates an AgentClient with OCI auth, builds both Agent instances,
+    and calls setup() to sync local tools with the remote agent endpoints.
+    setup() is idempotent — safe to call multiple times.
     """
-    endpoint = os.getenv("FOUNDRY_PROJECT_ENDPOINT")
-    model = os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME")
+    global _client, _extractor, _analyzer
+    if _extractor is not None:
+        return
 
-    # ── ExtractorAgent: PDF download + text extraction tool ────
-    extractor_client = AzureAIClient(
-        project_endpoint=endpoint,
-        model_deployment_name=model,
-        credential=credential,
-    )
-    extractor_ctx = extractor_client.as_agent(
+    # ── Auth ──────────────────────────────────────────────────
+    auth_type = os.getenv("OCI_AUTH_TYPE", "api_key")
+    region = os.getenv("OCI_REGION", "us-phoenix-1")
+
+    client_kwargs: dict = {"auth_type": auth_type, "region": region}
+    if auth_type == "api_key":
+        client_kwargs["profile"] = os.getenv("OCI_PROFILE", "DEFAULT")
+
+    _client = AgentClient(**client_kwargs)
+    logger.info(f"AgentClient created — auth={auth_type}, region={region}")
+
+    # ── Extractor Agent ───────────────────────────────────────
+    _extractor = Agent(
+        client=_client,
+        agent_endpoint_id=os.getenv("EXTRACTOR_AGENT_ENDPOINT_ID"),
         name="ExtractorAgent",
         instructions=EXTRACTOR_INSTRUCTIONS,
         tools=[download_and_extract_pdf],
     )
 
-    # ── AnalyzerAgent: MCP tools for live JDE queries ─────────
-    analyzer_client = AzureAIClient(
-        project_endpoint=endpoint,
-        model_deployment_name=model,
-        credential=credential,
-    )
-    analyzer_ctx = analyzer_client.as_agent(
+    # ── Analyzer Agent ────────────────────────────────────────
+    _analyzer = Agent(
+        client=_client,
+        agent_endpoint_id=os.getenv("ANALYZER_AGENT_ENDPOINT_ID"),
         name="AnalyzerAgent",
         instructions=ANALYZER_INSTRUCTIONS,
-        tools=[MCP_TOOL],
+        tools=[
+            jde_ap_voucher_query,
+            jde_gl_balance_query,
+            jde_gl_detail_query,
+            jde_ap_gl_integrity_check,
+        ],
     )
 
-    # Enter both async contexts
-    extractor = await extractor_ctx.__aenter__()
-    analyzer = await analyzer_ctx.__aenter__()
+    # ── Sync local tools → remote agent endpoints ─────────────
+    logger.info("Setting up ExtractorAgent (syncing tools to OCI)...")
+    _extractor.setup()
+    logger.info("Setting up AnalyzerAgent (syncing tools to OCI)...")
+    _analyzer.setup()
+    logger.info("Both agents initialized and synced with OCI GenAI Agents.")
 
-    # ── Build sequential workflow graph ────────────────────────
-    # ExtractorAgent output is automatically passed as input to AnalyzerAgent
-    workflow = (
-        WorkflowBuilder(start_executor=extractor)
-        .add_edge(extractor, analyzer)
-        .build()
+
+# ──────────────────────────────────────────────────────────────
+# Workflow steps (called from api.py)
+# ──────────────────────────────────────────────────────────────
+
+
+def run_extractor(object_name: str) -> str:
+    """Step 1: Download PDF and extract structured data.
+
+    Returns the ExtractorAgent's text output (should be JSON).
+    """
+    _ensure_agents()
+    logger.info(f"ExtractorAgent: processing {object_name}")
+    response = _extractor.run(
+        f"Please download and extract the PDF: {object_name}"
     )
+    text = response.output
+    logger.info(f"ExtractorAgent complete: {len(text)} chars")
+    return text
 
-    return workflow, extractor_ctx, analyzer_ctx
+
+def run_analyzer(extractor_text: str) -> str:
+    """Step 2: Cross-reference extraction against live JDE data via MCP.
+
+    Returns the AnalyzerAgent's markdown analysis report.
+    """
+    _ensure_agents()
+    logger.info("AnalyzerAgent: starting cross-reference analysis...")
+    response = _analyzer.run(
+        f"Analyze this extraction from the JDE Integrity Report:\n\n{extractor_text}"
+    )
+    text = response.output
+    logger.info(f"AnalyzerAgent complete: {len(text)} chars")
+    return text

@@ -2,7 +2,6 @@
 __pycache__/
 rag/
 PLAN.md
-quickstart.py
 .dockerignore
 .gitignore
 .fn/

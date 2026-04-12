@@ -106,7 +106,6 @@
 
 ## Pending Work
 
-- [ ] Replace placeholder orchestration names in `orchestrations.json` with real Orchestrator Studio names
 - [ ] Set up OCI Vault for secrets instead of plain env vars (production hardening)
 - [ ] PR #2: Hybrid dictionary — make Layer 1 fall back to Layer 0 when table not in curated dictionary
 - [ ] Add monitoring/alerting for container health

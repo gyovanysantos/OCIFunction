@@ -1,9 +1,8 @@
 # JDE Integrity Report AI Analyzer — Architecture Document
 
-> **Version**: 2.0 | **Date**: April 11, 2025 | **Status**: In Development  
-> **Repository**: `OCIFunction/` | **Regions**: us-phoenix-1 (OCI), Azure (Foundry)  
-> **v1.0 (OCI Function)**: Production — direct LLM inference fallback  
-> **v2.0 (Multi-Agent)**: Development — Foundry agents with MCP-powered JDE verification
+> **Version**: 2.0 | **Date**: April 12, 2026 | **Status**: In Development  
+> **Repository**: `OCIFunction/` | **Region**: us-phoenix-1 (OCI)  
+> **Multi-Agent**: OCI ADK agents with MCP-powered JDE verification
 
 ---
 
@@ -13,23 +12,20 @@
 2. [Solution Overview](#2-solution-overview)
 3. [End-to-End Architecture](#3-end-to-end-architecture)
 4. [JDE Orchestration Layer](#4-jde-orchestration-layer)
-5. [OCI Function — The Analysis Engine](#5-oci-function--the-analysis-engine)
-6. [OCI Infrastructure Components](#6-oci-infrastructure-components)
-7. [Security & IAM Policies](#7-security--iam-policies)
-8. [Codebase Structure](#8-codebase-structure)
-9. [API Contract](#9-api-contract)
-10. [Cost Considerations](#10-cost-considerations)
-11. [Scalability & Limits](#11-scalability--limits)
-12. [Future Enhancements](#12-future-enhancements)
-    - 12.1 [Next Step: Migrate to OCI Container Instances](#121-next-step-migrate-to-oci-container-instances-recommended)
-    - 12.2 [Other Enhancements](#122-other-enhancements)
-13. [Multi-Agent Architecture (v2.0)](#13-multi-agent-architecture-v20)
-    - 13.1 [Architecture Diagram](#131-architecture-diagram)
-    - 13.2 [Agent Descriptions](#132-agent-descriptions)
-    - 13.3 [JDE MCP Server Enhancement](#133-jde-mcp-server-enhancement)
-    - 13.4 [Workflow](#134-workflow)
-    - 13.5 [Deployment Topology](#135-deployment-topology)
-    - 13.6 [v2.0 Codebase Structure](#136-v20-codebase-structure)
+5. [OCI Infrastructure Components](#5-oci-infrastructure-components)
+6. [Security & IAM Policies](#6-security--iam-policies)
+7. [Codebase Structure](#7-codebase-structure)
+8. [API Contract](#8-api-contract)
+9. [Cost Considerations](#9-cost-considerations)
+10. [Scalability & Limits](#10-scalability--limits)
+11. [Future Enhancements](#11-future-enhancements)
+12. [Multi-Agent Architecture](#12-multi-agent-architecture)
+    - 12.1 [Architecture Diagram](#121-architecture-diagram)
+    - 12.2 [Agent Descriptions](#122-agent-descriptions)
+    - 12.3 [JDE MCP Server Enhancement](#123-jde-mcp-server-enhancement)
+    - 12.4 [Workflow](#124-workflow)
+    - 12.5 [Deployment Topology](#125-deployment-topology)
+    - 12.6 [Codebase Structure](#126-codebase-structure)
 
 ---
 
@@ -41,7 +37,7 @@ This solution adds **AI-powered analysis** to JD Edwards (JDE) Integrity Reports
 - **Automated triage** — No human needs to open and read every Integrity Report to decide if action is needed.
 - **Expert-level analysis** — The AI understands JDE-specific concepts (unposted batches, subledger-to-GL reconciliation, error codes) and explains them in business terms.
 - **Speed** — A 50+ page report is analyzed in under 30 seconds.
-- **Cost-efficient** — Serverless architecture means you only pay when reports are actually being analyzed.
+- **Cost-efficient** — Pay only when reports are actually being analyzed.
 
 ---
 
@@ -64,17 +60,20 @@ This solution adds **AI-powered analysis** to JD Edwards (JDE) Integrity Reports
 ┌──────────────────────────────────────────────────────────┼───────────────┐
 │                     ORACLE CLOUD INFRASTRUCTURE (OCI)     │               │
 │                                                           ▼               │
-│  ┌────────────────┐    ┌──────────────┐    ┌──────────────────────────┐  │
-│  │ API Gateway     │───>│ OCI Function │───>│ Object Storage (Bucket) │  │
-│  │ (Public REST)   │    │ (Python 3.11)│<───│ "agent-knowledge-base"  │  │
-│  └────────────────┘    └──────┬───────┘    └──────────────────────────┘  │
-│                               │                                          │
-│                               │ Full document text                       │
-│                               ▼                                          │
-│                      ┌──────────────────┐                                │
-│                      │ OCI GenAI Service │                                │
-│                      │ (Gemini 2.5 Flash)│                                │
-│                      └──────────────────┘                                │
+│  ┌────────────────┐    ┌──────────────────────┐                          │
+│  │ API Container   │───>│ ExtractorAgent       │                          │
+│  │ (FastAPI :8080) │    │ (PDF→structured JSON)│                          │
+│  └────────────────┘    └──────────┬───────────┘                          │
+│                                   │                                      │
+│                          ┌────────▼────────┐                             │
+│                          │ AnalyzerAgent    │                             │
+│                          │ (MCP bridge)     │                             │
+│                          └────────┬────────┘                             │
+│                                   │                                      │
+│                          ┌────────▼────────┐    ┌──────────────────┐     │
+│                          │ JDE MCP Server   │───>│ JDE AIS REST API │     │
+│                          │ (Node.js :3000)  │    │ F0411,F0902,F0901│     │
+│                          └─────────────────┘    └──────────────────┘     │
 │                                                                          │
 │  Compartment: jdee1 | Region: us-phoenix-1                               │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -91,19 +90,20 @@ This solution adds **AI-powered analysis** to JD Edwards (JDE) Integrity Reports
 | **1** | JDE Batch Job | Scheduled job runs an Integrity Report (e.g., R007011 Unposted Batches, R047001A A/P to G/L Integrity). Output is a PDF. |
 | **2** | JDE Orchestration | A JDE Orchestration is triggered. It executes 5 sequential service/connector requests (see Section 4). |
 | **3** | JDE → Object Storage | The Orchestration uploads the report PDF to an OCI Object Storage bucket via a Connector Request (REST PUT). |
-| **4** | JDE → API Gateway | The Orchestration sends a REST `POST /v1/analyze` to the OCI API Gateway with the PDF filename. |
-| **5** | API Gateway → OCI Function | The gateway routes the request to the OCI Function (`oci-agent-function`). |
-| **6** | OCI Function → Object Storage | The function downloads the PDF from the bucket using OCI Object Storage SDK. |
-| **7** | OCI Function (pypdf) | The function extracts all text from the PDF using `pypdf`. |
-| **8** | Content Check | If extracted text > 300 characters → report has data (`checkerResponse: "Yes"`). Otherwise → empty report (`"No"`), analysis skipped. |
-| **9** | OCI Function → GenAI | Full document text is sent to OCI GenAI Inference API (`google.gemini-2.5-flash`) with a JDE-specialist system prompt. |
-| **10** | Response | The function returns `{"checkerResponse", "analysisResponse"}` back through the API Gateway to JDE. |
+| **4** | JDE → API | The Orchestration sends a REST `POST /v1/analyze` to the API container with the PDF filename. |
+| **5** | API → ExtractorAgent | The API triggers the ADK workflow. ExtractorAgent downloads the PDF from OCI Object Storage, extracts text with pypdf, and produces structured JSON. |
+| **6** | ExtractorAgent → AnalyzerAgent | The structured extraction (report type, discrepancies, accounts) is passed to the AnalyzerAgent. |
+| **7** | AnalyzerAgent → MCP Server | The AnalyzerAgent calls MCP bridge tools to query live JDE data (F0411, F0902, F0901) via the JDE MCP Server. |
+| **8** | MCP Server → JDE AIS | The MCP server queries JDE AIS REST API to retrieve actual AP/GL data for cross-referencing. |
+| **9** | AnalyzerAgent | Cross-references PDF findings against live JDE data, confirming/resolving discrepancies. |
+| **10** | Response | The API returns `{"checkerResponse", "analysisResponse"}` with JDE-safe HTML back to the JDE Orchestration. |
 | **11** | JDE Orchestration | The Orchestration receives the AI analysis and can route it (email, notification, JDE queue, etc.). |
 
 ### Design Principles
 
-- **Serverless** — No servers to manage. OCI Functions spin up on demand and scale to zero when idle.
-- **Direct inference** — The full document text is sent to the LLM in a single prompt. No RAG, no vector databases, no embeddings. This is intentional: each call analyzes ONE specific report, not a corpus of documents.
+- **Multi-agent separation** — ExtractorAgent handles PDF processing, AnalyzerAgent handles JDE data cross-referencing. Each agent has a focused responsibility.
+- **Live data verification** — Unlike simple LLM-only inference, the AnalyzerAgent queries live JDE systems via MCP to verify findings from the PDF.
+- **Deterministic workflow** — Plain Python sequential `agent.run()` calls ensure predictable execution order.
 - **Deterministic checker** — The "does this report have data?" decision is code-based (text length check), not LLM-based. This eliminates false positives from AI hallucination.
 
 ---
@@ -152,76 +152,23 @@ The JDE Orchestration is configured inside JD Edwards EnterpriseOne and acts as 
 
 ---
 
-## 5. OCI Function — The Analysis Engine
+## 5. OCI Infrastructure Components
 
-### What It Does
-
-The function (`func.py`) is the core processing logic. It is a **stateless, serverless Python function** that:
-
-1. **Downloads** the specified PDF from Object Storage
-2. **Extracts** text from all pages using `pypdf`
-3. **Checks** whether the report contains meaningful data (> 300 characters of text)
-4. **Analyzes** the report by sending the full text to OCI GenAI with a JDE-specialist system prompt
-5. **Returns** a structured JSON response
-
-### Technology Stack
-
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| Runtime | Python | 3.11 |
-| Function Framework | OCI FDK (Fn Project) | >= 0.1.105 |
-| OCI SDK | `oci` Python SDK | >= 2.168.0 |
-| PDF extraction | `pypdf` | >= 4.0.0 |
-| Container | Docker (multi-stage build) | fnproject/python:3.11 |
-| LLM | Google Gemini 2.5 Flash | On-demand serving via OCI |
-
-### System Prompt (AI Persona)
-
-The function instructs the LLM to act as a **JD Edwards Integrity Report analyst**. The system prompt:
-
-- Requires the AI to identify specific integrity issues
-- Demands explanations in JDE context (table names like F0411, F0911, error codes, batch statuses)
-- Enforces structured output: Summary → Detailed Problems → Recommended Fixes
-- Caps response length at ~850 words to keep analysis focused and actionable
-
-### Function Configuration
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| Memory | 1024 MB | Sufficient for PDF parsing + large text payloads |
-| Timeout | 300 seconds | GenAI inference can take 10-60s for large reports |
-| Image Registry | `phx.ocir.io/axzkbtajofjq/agent-functions/` | Oracle Container Image Registry (Phoenix) |
-| Current Version | v0.0.29 | |
-
----
-
-## 6. OCI Infrastructure Components
-
-### 6.1 Object Storage Bucket
+### 5.1 Object Storage Bucket
 
 | Property | Value |
 |----------|-------|
-| Bucket Name | `agent-knowledge-base` |
-| Namespace | `axzkbtajofjq` |
+| Bucket Name | `OBJECTSTORAGE` |
+| Namespace | `idxoqn0ijjyv` |
 | Tier | Standard |
 | Region | us-phoenix-1 |
 | Purpose | Stores Integrity Report PDFs uploaded by JDE Orchestrations |
 
-JDE uploads each report PDF to this bucket before requesting analysis. The function reads from this bucket using the OCI SDK with Resource Principal authentication — no API keys stored in code.
+JDE uploads each report PDF to this bucket before requesting analysis. The ExtractorAgent reads from this bucket using the OCI SDK.
 
-### 6.2 OCI Functions Application
+### 5.2 API Gateway
 
-| Property | Value |
-|----------|-------|
-| App Name | `agent-app` |
-| App OCID | `ocid1.fnapp.oc1.phx.amaaaaaa7bibg4qaocgvbxdiwnete6q33m7ruullxy4zca5iqmk7fhtz75jq` |
-| Function Name | `oci-agent-function` |
-| Function OCID | `ocid1.fnfunc.oc1.phx.amaaaaaa7bibg4qa6n77gpsbj6hzwui2k7uyqsuw7qaw2iwa2yll3ng4yeoa` |
-| Compartment | `jdee1` |
-
-### 6.3 API Gateway
-
-Two gateways provide REST access to the function:
+Two gateways provide REST access:
 
 | Gateway | Type | Hostname | Use Case |
 |---------|------|----------|----------|
@@ -230,127 +177,94 @@ Two gateways provide REST access to the function:
 
 Both gateways have an `AgentAnalyze` deployment with:
 - **Path prefix**: `/v1`
-- **Route**: `POST /analyze` → OCI Function backend
+- **Route**: `POST /analyze`
 - **Full URL**: `https://<gateway-hostname>/v1/analyze`
 
-### 6.4 OCI GenAI Service
+### 5.3 OCI GenAI Agents Service
 
 | Property | Value |
 |----------|-------|
-| Service | OCI Generative AI Inference |
-| Model | `google.gemini-2.5-flash` |
-| Serving Mode | On-demand (no dedicated hosting, pay per use) |
-| Context Window | ~1,000,000 tokens (~750,000 words) |
-| Max Output Tokens | 8,192 (configured) |
-| Temperature | 0.2 (low creativity, high consistency) |
+| Compartment | jdee1 |
 | Region | us-phoenix-1 |
-
-**Why Gemini 2.5 Flash?**
-- Massive context window handles 50+ page reports without truncation
-- Fast inference (Flash variant optimized for speed)
-- Available for on-demand serving in OCI Phoenix (no provisioning needed)
-- Cost-efficient compared to larger models (Pro, GPT-4)
-
-### 6.5 Container Image Registry (OCIR)
-
-| Property | Value |
-|----------|-------|
-| Registry | `phx.ocir.io` |
-| Repository | `axzkbtajofjq/agent-functions/oci-agent-function` |
-| Build | Multi-stage Docker (slim production image) |
-| Base Image | `fnproject/python:3.11` |
+| ExtractorAgent | `EXTRACTOR_AGENT_ENDPOINT_ID` |
+| AnalyzerAgent | `ANALYZER_AGENT_ENDPOINT_ID` |
+| Auth | `api_key` (local dev), `instance_principal` (OCI compute) |
 
 ---
 
-## 7. Security & IAM Policies
+## 6. Security & IAM Policies
 
-### 7.1 Authentication Model
+### 6.1 Authentication Model
 
-The function uses **OCI Resource Principal** authentication — no API keys, passwords, or secrets are stored in the code or environment. The function's identity is derived from its OCI resource, and IAM policies grant permissions based on a Dynamic Group membership.
+The agents use **OCI API Key** authentication for local development and **Instance Principal** for OCI compute deployments. No hardcoded credentials in the code.
 
-```
-┌──────────────────┐         ┌──────────────────┐
-│  OCI Function     │──RP───>│  Dynamic Group    │
-│  (resource        │ auth    │  agent-functions- │
-│   principal)      │         │  dg               │
-└──────────────────┘         └────────┬───────────┘
-                                      │
-                          IAM Policies │ grant access to:
-                                      │
-                    ┌─────────────────┼────────────────────┐
-                    │                 │                     │
-              ┌─────▼─────┐   ┌──────▼──────┐   ┌────────▼────────┐
-              │ Object     │   │ GenAI       │   │ GenAI Agent     │
-              │ Storage    │   │ Inference   │   │ (legacy, can    │
-              │ (read)     │   │ (manage)    │   │  be removed)    │
-              └───────────┘   └─────────────┘   └─────────────────┘
-```
-
-### 7.2 Dynamic Group
-
-| Property | Value |
-|----------|-------|
-| Name | `agent-functions-dg` |
-| Matching Rule | Matches all `fnfunc` resources in compartment `jdee1` |
-
-### 7.3 IAM Policies
+### 6.2 IAM Policies
 
 | Policy Name | Statement | Purpose |
 |-------------|-----------|---------|
-| `agent-functions-policy` | `Allow dynamic-group agent-functions-dg to manage generative-ai-family in compartment jdee1` | Function can call OCI GenAI Inference API |
-| `agent-functions-policy` | `Allow dynamic-group agent-functions-dg to manage genai-agent-family in compartment jdee1` | Legacy (from previous Agent-based architecture). Can be removed. |
-| `fn-objectstorage-read` | `Allow dynamic-group agent-functions-dg to read object-family in compartment jdee1` | Function can download PDFs from Object Storage |
-| `apigw-functions-policy` | `Allow any-user to use functions-family in compartment jdee1 where ALL {request.principal.type = 'ApiGateway', ...}` | API Gateway can invoke the function |
+| `agent-functions-policy` | `Allow dynamic-group agent-functions-dg to manage generative-ai-family in compartment jdee1` | Access OCI GenAI Inference API |
+| `fn-objectstorage-read` | `Allow dynamic-group agent-functions-dg to read object-family in compartment jdee1` | Download PDFs from Object Storage |
+| `apigw-functions-policy` | `Allow any-user to use functions-family in compartment jdee1 where ALL {request.principal.type = 'ApiGateway', ...}` | API Gateway routing |
 
-### 7.4 Network Security
+### 6.3 Network Security
 
 | Layer | Configuration |
 |-------|--------------|
 | **Public API Gateway** | HTTPS only (TLS 1.2+). No authentication currently configured — suitable for internal networks or VPN. |
 | **Private API Gateway** | Accessible only from within the VCN (`PrivatRegSub` subnet 10.9.4.0/24). Used when JDE servers are on the same OCI VCN. |
-| **OCI Function** | Not directly accessible from the internet. Only invokable via `fn invoke`, API Gateway, or OCI SDK. |
 | **Object Storage** | Private bucket. Accessible only via IAM-authenticated OCI SDK calls. No public access. |
-| **GenAI Service** | OCI service endpoint. Accessed via OCI SDK with Resource Principal auth. Traffic stays on OCI backbone. |
+| **GenAI Service** | OCI service endpoint. Accessed via OCI SDK. Traffic stays on OCI backbone. |
 
-### 7.5 Security Recommendations for Production
+### 6.4 Security Recommendations for Production
 
 | Recommendation | Priority | Details |
 |----------------|----------|---------|
 | Add API Gateway authentication | **High** | Add API key validation or OAuth2/JWT to the public gateway to prevent unauthorized access. |
 | Enable API Gateway rate limiting | Medium | Protect against abuse and control costs. |
-| Remove legacy `genai-agent-family` policy | Low | No longer needed after Agent/KB removal. |
-| Enable OCI Audit logging | Medium | Track all API Gateway and Function invocations for compliance. |
-| Restrict Dynamic Group scope | Low | Narrow the matching rule to the specific function OCID instead of all functions in the compartment. |
+| Enable OCI Audit logging | Medium | Track all API Gateway invocations for compliance. |
 
 ---
 
-## 8. Codebase Structure
+## 7. Codebase Structure
 
 All source code resides in the `OCIFunction/` directory:
 
 ```
 OCIFunction/
-├── func.py             # Main function handler (production code)
-├── quickstart.py       # Local development/testing script (api_key auth)
-├── requirements.txt    # Python dependencies: fdk, oci, pypdf
-├── Dockerfile          # Multi-stage Docker build for OCI Functions
-├── func.yaml           # Function metadata: name, version, memory, timeout
-├── PLAN.md             # Implementation log and decision record
-├── ARCHITECTURE.md     # This document
-├── .dockerignore       # Excludes .venv, __pycache__, rag/, etc. from Docker
-└── .gitignore          # Excludes .venv, __pycache__, rag/, ingest/, *.txt
+├── docker-compose.yml               # Local dev: 2 services (mcp, api)
+├── .env.example                     # Root env template for docker-compose
+│
+├── agents/                          # OCI ADK Multi-Agent System
+│   ├── api.py                       # FastAPI wrapper (POST /v1/analyze, GET /health)
+│   ├── workflow.py                  # ADK deterministic workflow: Extractor → Analyzer
+│   ├── mcp_bridge.py                # ADK @tool functions → MCP server via HTTP (JSON-RPC)
+│   ├── Dockerfile.api               # API container (python:3.12-slim, port 8080)
+│   ├── requirements.txt             # Python deps (oci[adk], httpx, fastapi, pypdf)
+│   ├── extractor/
+│   │   └── agent.py                 # ExtractorAgent: PDF download + text extraction (@tool)
+│   ├── analyzer/
+│   │   └── agent.py                 # AnalyzerAgent instructions (MCP tools in mcp_bridge)
+│   └── __init__.py
+│
+├── jde-mcp-server-template/         # JDE MCP Server (git subtree)
+│   └── src/
+│       ├── tools/integrity.ts       # 4 AP/GL integrity tools
+│       ├── schemas/tools.ts         # Zod schemas (integrity + generic)
+│       ├── data/dictionary.json     # F0411, F0902, F0901
+│       └── index.ts                 # Tool registration
+│
+├── tests/                           # Integration tests
+│   ├── test_mcp.py                  # MCP server tests
+│   └── test_workflow_local.py       # Local workflow test
+│
+├── ARCHITECTURE.md                  # This document
+├── PLAN.md                          # Project log and decision record
+└── TECH-STACK.md                    # Technology inventory
 ```
-
-| File | Purpose |
-|------|---------|
-| `func.py` | Production function handler. Downloads PDF, extracts text, calls GenAI. Uses Resource Principal auth. |
-| `quickstart.py` | Development mirror of func.py. Uses `~/.oci/config` API key auth for local testing. |
-| `Dockerfile` | Two-stage build: installs deps in build stage, copies to slim runtime image. |
-| `func.yaml` | Declares function name (`oci-agent-function`), memory (1024 MB), timeout (300s). |
 
 ---
 
-## 9. API Contract
+## 8. API Contract
 
 ### Request
 
@@ -404,21 +318,20 @@ The `analysisResponse` field contains **JDE-safe HTML** (compatible with `CL001_
 
 ---
 
-## 10. Cost Considerations
+## 9. Cost Considerations
 
-### 10.1 OCI Services Pricing Model
+### 9.1 OCI Services Pricing Model
 
 All components use **pay-per-use** pricing. There are no fixed monthly commitments required.
 
 | Service | Pricing Model | Key Metric | Estimated Cost |
 |---------|--------------|------------|----------------|
-| **OCI Functions** | Per invocation + compute time | $0.0002/invocation + $0.00001417/GB-second | Very low. A 30-second invocation at 1 GB ≈ $0.0006 |
+| **OCI Container Instances** | Per compute time | vCPU + memory hours | Depends on instance size and uptime |
 | **OCI Object Storage** | Per GB stored + requests | $0.0255/GB/month (Standard) + $0.0034/10K requests | Minimal. Report PDFs are small (< 5 MB each). |
 | **OCI API Gateway** | Per million API calls | $3.00 per million calls | Minimal at expected volumes. |
-| **OCI GenAI (On-Demand)** | Per token (input + output) | Varies by model. Gemini Flash is among the most cost-efficient. | Primary cost driver. See below. |
-| **OCIR (Container Registry)** | Per GB stored | First 500 MB free, then $0.0255/GB/month | Negligible. Docker image is ~100 MB. |
+| **OCI GenAI (On-Demand)** | Per token (input + output) | Varies by model. | Primary cost driver. See below. |
 
-### 10.2 GenAI Cost Estimation
+### 9.2 GenAI Cost Estimation
 
 The GenAI inference cost depends on document size (input tokens) and analysis length (output tokens).
 
@@ -430,7 +343,7 @@ The GenAI inference cost depends on document size (input tokens) and analysis le
 
 > **Note**: OCI GenAI on-demand pricing for Google Gemini models through OCI may vary. Check the [OCI GenAI Pricing page](https://www.oracle.com/cloud/pricing/#generative-ai) for current rates. OCI often provides generous free-tier allowances for GenAI services.
 
-### 10.3 Monthly Cost Scenarios
+### 9.3 Monthly Cost Scenarios
 
 | Scenario | Reports/Month | Estimated Monthly Cost |
 |----------|---------------|----------------------|
@@ -438,9 +351,9 @@ The GenAI inference cost depends on document size (input tokens) and analysis le
 | **Medium volume** | 500 reports | $2.50 - $10.00 |
 | **High volume** | 5,000 reports | $25.00 - $100.00 |
 
-> These estimates include Functions compute, Object Storage, API Gateway, and GenAI inference. The dominant cost is GenAI inference. All other components contribute less than $1/month at these volumes.
+> These estimates include Object Storage, API Gateway, and GenAI inference. The dominant cost is GenAI inference.
 
-### 10.4 Cost Optimization Levers
+### 9.4 Cost Optimization Levers
 
 | Strategy | Impact |
 |----------|--------|
@@ -451,7 +364,7 @@ The GenAI inference cost depends on document size (input tokens) and analysis le
 
 ---
 
-## 11. Scalability & Limits
+## 10. Scalability & Limits
 
 | Dimension | Limit | Notes |
 |-----------|-------|-------|
@@ -465,40 +378,7 @@ The GenAI inference cost depends on document size (input tokens) and analysis le
 
 ---
 
-## 12. Future Enhancements
-
-### 12.1 Next Step: Migrate to OCI Container Instances (Recommended)
-
-The current OCI Functions architecture is ideal for a proof of concept, but the **recommended next evolution** is to migrate to **OCI Container Instances** (or OCI Container Apps). This involves rewriting the function as a standalone Python web service (e.g., Flask or FastAPI) with its own API routes, then deploying it as a long-running container.
-
-**Why migrate to containers?**
-
-| Benefit | Details |
-|---------|---------|
-| **Own API routes** | Define custom endpoints (`/v1/analyze`, `/v1/health`, `/v1/status`, `/v1/reports`) directly in the application code (Flask/FastAPI) instead of relying on fn invoke + API Gateway routing. More flexibility for versioning, middleware, and request validation. |
-| **Observability & Monitoring** | OCI Container Instances integrate with **OCI Logging** via Docker's native logging driver. All `print()` and `logging.*` output is captured automatically. With OCI Functions, logs are limited to fn syslog. Containers give structured JSON logs, log levels, correlation IDs, and easy integration with OCI Monitoring dashboards and alarms. |
-| **Health checks & readiness probes** | Containers support HTTP health check endpoints (`/health`). OCI can automatically restart unhealthy instances — not possible with Functions. |
-| **Longer execution times** | Functions are capped at 300 seconds. Containers have no such limit, enabling analysis of very large report batches. |
-| **Warm starts** | Containers stay running (no cold-start penalty). OCI Functions can have 5-15 second cold starts when idle. |
-| **Local development parity** | Run the same Docker container locally (`docker run -p 8080:8080`) with identical behavior to production. No FDK dependency or fn server needed. |
-
-**What changes in the migration:**
-
-| Component | Current (OCI Functions) | Target (OCI Container Instances) |
-|-----------|------------------------|----------------------------------|
-| Framework | OCI FDK (`fdk`) | Flask or FastAPI |
-| Entry point | `handler(ctx, data)` | `@app.post("/v1/analyze")` |
-| Routing | API Gateway routes → fn invoke | Application-defined routes (Flask/FastAPI) |
-| Auth to OCI | Resource Principal (same) | Instance Principal or Resource Principal (same pattern) |
-| Container | Same Docker image, different ENTRYPOINT | `ENTRYPOINT ["python", "app.py"]` or `uvicorn app:app` |
-| Logging | `fdk` syslog → limited | `logging.getLogger()` → Docker stdout → OCI Logging service |
-| Monitoring | Basic fn invocation metrics | OCI Monitoring: custom metrics, CPU/memory, request latency, log-based alarms |
-| API Gateway | Still used (optional) | Can keep API Gateway for TLS termination and rate limiting, or expose container directly via load balancer |
-| Cost model | Per-invocation (scale to zero) | Per-hour while running (always-on). More predictable cost at higher volumes. |
-
-**Estimated migration effort**: Low-Medium. The core logic (`func.py` — download PDF, extract text, call GenAI) stays identical. The change is replacing the FDK handler wrapper with Flask/FastAPI route handlers and adding a structured logging setup.
-
-### 12.2 Other Enhancements
+## 11. Future Enhancements
 
 | Enhancement | Description | Complexity |
 |-------------|-------------|------------|
@@ -512,25 +392,19 @@ The current OCI Functions architecture is ideal for a proof of concept, but the 
 
 ---
 
-*This document describes the architecture as of v0.0.29 deployed on March 19, 2026.*
+*This document describes the architecture as of April 12, 2026.*
 
 ---
 
-## 13. Multi-Agent Architecture (v2.0)
+## 12. Multi-Agent Architecture
 
-> **Status**: Deployed (MCP) / In Development (Agents) | **Target**: Foundry Agent Service (Azure) + JDE MCP Server (Azure Container Apps)
-
-v2.0 evolves the single-script PDF→LLM pipeline into a **multi-agent architecture** using Microsoft Foundry Agent Framework. Instead of one GenAI call that reads the PDF and produces an analysis, the system now splits into two specialized agents that work sequentially.
-
-**Key improvement**: The AnalyzerAgent can **query live JDE data** via MCP tools to cross-reference the PDF findings, producing far more accurate and actionable analysis than v1.0's LLM-only approach.
-
-### 13.1 Architecture Diagram
+### 12.1 Architecture Diagram
 
 ```
                     ┌───────────────────────────────┐
-                    │   Foundry Agent Service        │
-                    │   Sequential Workflow           │
-                    │   (ExtractorAgent → Analyzer)   │
+                    │   OCI GenAI Agents Service     │
+                    │   (us-phoenix-1 / jdee1)       │
+                    │   ADK Deterministic Workflow    │
                     └─────────────┬─────────────────┘
                                   │
                      ┌────────────┼─────────────┐
@@ -538,14 +412,19 @@ v2.0 evolves the single-script PDF→LLM pipeline into a **multi-agent architect
               ┌──────▼──────┐           ┌───────▼───────┐
               │  Extractor  │──struct──▶│   Analyzer    │
               │   Agent     │  JSON     │     Agent     │
-              │ (PDF→data)  │           │  (MCP tools)  │
+              │ (PDF→data)  │           │(MCP bridge)   │
               └──────┬──────┘           └───────┬───────┘
                      │                          │
               ┌──────▼──────┐           ┌───────▼───────┐
-              │ OCI Object  │           │  JDE MCP      │
-              │  Storage    │           │  Server       │
-              │ (bucket)    │           │ (Azure CApps) │
-              └─────────────┘           └───────┬───────┘
+              │ OCI Object  │           │ MCP Bridge    │
+              │  Storage    │           │ (httpx→MCP)   │
+              │ (bucket)    │           └───────┬───────┘
+              └─────────────┘                   │
+                                         ┌──────▼──────┐
+                                         │  JDE MCP    │
+                                         │  Server     │
+                                         │ (container) │
+                                         └──────┬──────┘
                                                 │
                                          ┌──────▼──────┐
                                          │  JDE AIS    │
@@ -555,12 +434,12 @@ v2.0 evolves the single-script PDF→LLM pipeline into a **multi-agent architect
                                          └─────────────┘
 ```
 
-### 13.2 Agent Descriptions
+### 12.2 Agent Descriptions
 
 | Agent | Purpose | Tools | Technology |
 |-------|---------|-------|------------|
-| **ExtractorAgent** | Downloads PDF from OCI Object Storage, extracts text with `pypdf`, uses LLM to produce structured JSON (report type, company, discrepancies, accounts) | `download_and_extract_pdf` (FunctionTool) | Python, OCI SDK, pypdf |
-| **AnalyzerAgent** | Receives structured extraction, queries live JDE data via MCP tools, cross-references PDF findings, produces verified analysis with recommendations | 4 MCP tools (see §13.3) | Python, McpTool → JDE MCP Server |
+| **ExtractorAgent** | Downloads PDF from OCI Object Storage, extracts text with `pypdf`, uses LLM to produce structured JSON (report type, company, discrepancies, accounts) | `download_and_extract_pdf` (ADK `@tool`) | Python, OCI SDK, pypdf, OCI ADK |
+| **AnalyzerAgent** | Receives structured extraction, queries live JDE data via MCP bridge tools, cross-references PDF findings, produces verified analysis with recommendations | 4 MCP bridge `@tool` functions (see §13.3) | Python, OCI ADK, httpx → MCP Server |
 
 **ExtractorAgent output schema:**
 ```json
@@ -582,7 +461,7 @@ v2.0 evolves the single-script PDF→LLM pipeline into a **multi-agent architect
 }
 ```
 
-### 13.3 JDE MCP Server Enhancement
+### 12.3 JDE MCP Server Enhancement
 
 The existing JDE MCP server (TypeScript, `jde-mcp-server-template/`) was enhanced with 4 new **curated integrity tools** and 3 new table definitions:
 
@@ -605,118 +484,83 @@ The existing JDE MCP server (TypeScript, `jde-mcp-server-template/`) was enhance
 
 The `jde_ap_gl_integrity_check` tool is the centerpiece — it performs the same reconciliation logic as the JDE R047001A report, but programmatically, returning `{ matches, discrepancies, summary }`.
 
-### 13.4 Workflow
+### 12.4 Workflow
 
-The workflow is a **sequential graph** built with `WorkflowBuilder`:
+The workflow is a **deterministic pipeline** using OCI ADK — plain Python sequential `agent.run()` calls:
 
 ```
-Input (object_name) → ExtractorAgent → structured JSON → AnalyzerAgent → final report
+Input (object_name) → ExtractorAgent.run() → structured JSON → AnalyzerAgent.run() → final report
 ```
 
 1. **Input**: User provides `object_name` (PDF filename in OCI bucket)
 2. **ExtractorAgent**: Calls `download_and_extract_pdf` tool → LLM produces structured JSON extraction
-3. **AnalyzerAgent**: Receives JSON → calls `jde_ap_gl_integrity_check` and other MCP tools → cross-references PDF findings against live data → produces verified analysis
-4. **Output**: Structured analysis with confirmed/resolved/new issues and recommendations
+3. **has_data check**: If PDF has no data, skip analysis and return early
+4. **AnalyzerAgent**: Receives JSON → calls `jde_ap_gl_integrity_check` and other MCP bridge tools → cross-references PDF findings against live data → produces verified analysis
+5. **Output**: Structured analysis with confirmed/resolved/new issues and recommendations
 
-### 13.5 Deployment Topology
+**ADK Pattern**: `AgentClient` → 2 `Agent` instances → `setup()` (once) → sequential `run()` calls. The agent loop (LLM reasoning + tool selection) runs on OCI GenAI Agents Service. When a tool needs to be called, control returns to the local ADK, which executes the function and submits the result back.
 
-| Component | Platform | Transport | Auth | URL |
-|-----------|----------|-----------|------|-----|
-| **API Wrapper** | Azure Container Apps (`jde-integrity-api`) | HTTP POST `/v1/analyze` | Static Azure AD token (see caveat below) | `https://jde-integrity-api.bluedesert-fb732cac.eastus.azurecontainerapps.io` |
-| **JDE MCP Server** | Azure Container Apps (`jde-mcp-integrity`) | HTTP POST `/mcp` | Unauthenticated (public) | `https://jde-mcp-integrity.bluedesert-fb732cac.eastus.azurecontainerapps.io` |
+### 12.5 Deployment Topology
+
+| Component | Platform | Transport | Auth | Notes |
+|-----------|----------|-----------|------|-------|
+| **API + Agents** | Container (OCI or Docker Compose) | HTTP POST `/v1/analyze` | OCI `api_key` or `instance_principal` | Runs ExtractorAgent + AnalyzerAgent in-process via OCI ADK |
+| **JDE MCP Server** | Container (same compose or separate) | HTTP POST `/mcp` | Unauthenticated | MCP StreamableHTTP with JSON responses |
+| **OCI GenAI Agents** | OCI GenAI Agents Service (us-phoenix-1) | ADK ↔ Agent Endpoint | OCI auth (via AgentClient) | 2 agent endpoints in jdee1 compartment |
 | **JDE AIS** | On-prem / OCI | HTTP REST | Basic Auth (via AIS connector) | Configured via env vars |
-| **OCI Object Storage** | OCI (us-phoenix-1) | OCI SDK | Base64-encoded PEM key (Container App secret) | — |
-| **OCI Function (v1.0 fallback)** | OCI Functions | HTTP via API Gateway | Resource Principal | — |
+| **OCI Object Storage** | OCI (us-phoenix-1) | OCI SDK | API key / instance principal | PDF storage bucket |
 
-**Azure Infrastructure**:
-- ACR: `acrjdemcppo.azurecr.io`
-  - `jde-mcp-integrity:v1` — MCP server image
-  - `jde-integrity-api:v5` — API wrapper image
-- Container Apps Environment: `jde-mcp-env` (East US)
-- Resource Group: `rg-hackathon-2603` (subscription: CLSandbox2)
-- API Managed Identity Principal: `8468895c-7fcc-43dc-aceb-ce7dd2412572`
-
-#### ⚠️ Auth Caveat — Foundry Token
-
-The API wrapper container (`jde-integrity-api`) authenticates to Azure AI Foundry using a **static Azure AD token** (`FOUNDRY_TOKEN` env var). This token **expires in ~1 hour** and must be refreshed manually:
-
-```bash
-# Refresh token from Azure CLI
-token=$(az account get-access-token --resource "https://ai.azure.com" --query accessToken -o tsv)
-az containerapp update --name jde-integrity-api --resource-group rg-hackathon-2603 \
-  --set-env-vars "FOUNDRY_TOKEN=$token" --revision-suffix "refresh-$(date +%s)"
-```
-
-**Why**: The Container App has a system-assigned managed identity, but the user's account lacks `Microsoft.Authorization/roleAssignments/write` permission in this sandbox subscription to assign `Azure AI User` role.
-
-**Permanent fix**: An **Owner** or **User Access Administrator** must run:
-```bash
-az role assignment create \
-  --assignee 8468895c-7fcc-43dc-aceb-ce7dd2412572 \
-  --role "Azure AI User" \
-  --scope /subscriptions/74528fbf-d0fa-4d72-b3ef-dee45c2a8293/resourceGroups/rg-hackathon-2603
-```
-Then remove `FOUNDRY_TOKEN` env var — the container will use `DefaultAzureCredential` → managed identity automatically.
+**OCI Infrastructure (jdee1 compartment, us-phoenix-1)**:
+- GenAI Agent Endpoints: `EXTRACTOR_AGENT_ENDPOINT_ID`, `ANALYZER_AGENT_ENDPOINT_ID`
+- Object Storage Bucket: `OBJECTSTORAGE` (namespace: `idxoqn0ijjyv`)
+- ADK auth: `api_key` for local dev, `instance_principal` for OCI compute
 
 #### OCI Auth in Container
 
-The ExtractorAgent in the container authenticates to OCI Object Storage using env vars instead of `~/.oci/config`:
+| Env Var | Purpose |
+|---------|---------|
+| `OCI_AUTH_TYPE` | `api_key` (local dev) or `instance_principal` (OCI compute) |
+| `OCI_REGION` | `us-phoenix-1` |
+| `OCI_PROFILE` | OCI config profile (default: `DEFAULT`) |
+| `EXTRACTOR_AGENT_ENDPOINT_ID` | OCID of ExtractorAgent endpoint |
+| `ANALYZER_AGENT_ENDPOINT_ID` | OCID of AnalyzerAgent endpoint |
+| `MCP_SERVER_URL` | MCP server URL (e.g. `http://mcp:3000/mcp`) |
 
-| Env Var | Source | Stored As |
-|---------|--------|-----------|
-| `OCI_USER` | OCI config `user=` | Plain env var |
-| `OCI_FINGERPRINT` | OCI config `fingerprint=` | Plain env var |
-| `OCI_TENANCY` | OCI config `tenancy=` | Plain env var |
-| `OCI_REGION` | OCI config `region=` | Plain env var |
-| `OCI_KEY_CONTENT` | PEM key file (base64-encoded) | Container App secret (`oci-key-content`) |
-
-The `extractor/agent.py` `_get_oci_config()` function decodes the base64 key and constructs an OCI config dict.
-
-### 13.6 v2.0 Codebase Structure
+### 12.6 Codebase Structure
 
 ```
 OCIFunction/
-├── func.py                          # v1.0 OCI Function handler (production fallback)
-├── quickstart.py                    # v1.0 Local dev/test (api_key auth)
-├── requirements.txt                 # v1.0 Python deps (fdk, oci, pypdf)
-├── Dockerfile                       # v1.0 OCI Function container
-├── func.yaml                        # v1.0 Function metadata
-├── docker-compose.yml               # v2.0 Local dev: 4 services (mcp, extractor, analyzer, api)
-├── .env.example                     # v2.0 Root env template for docker-compose
+├── docker-compose.yml               # Local dev: 2 services (mcp, api)
+├── .env.example                     # Root env template for docker-compose
 │
-├── agents/                          # v2.0 Foundry Multi-Agent System
+├── agents/                          # OCI ADK Multi-Agent System
 │   ├── api.py                       # FastAPI wrapper (POST /v1/analyze, GET /health)
-│   ├── app.py                       # Workflow entry point (sequential orchestration)
-│   ├── workflow.py                  # Sequential workflow: Extractor → Analyzer
-│   ├── Dockerfile.api               # API wrapper container (python:3.12-slim, port 8080)
-│   ├── requirements-api.txt         # API deps (fastapi, uvicorn + agent deps)
+│   ├── workflow.py                  # ADK deterministic workflow: Extractor → Analyzer
+│   ├── mcp_bridge.py                # ADK @tool functions → MCP server via HTTP (JSON-RPC)
+│   ├── Dockerfile.api               # API container (python:3.12-slim, port 8080)
+│   ├── requirements.txt             # Python deps (oci[adk], httpx, fastapi, pypdf)
 │   ├── extractor/
-│   │   ├── agent.py                 # ExtractorAgent: PDF download + text extraction
-│   │   ├── app.py                   # Standalone HTTP entry point (port 8088)
-│   │   ├── Dockerfile               # Container (python:3.12-slim)
-│   │   └── requirements.txt         # Deps: oci, pypdf, agent-framework
+│   │   └── agent.py                 # ExtractorAgent: PDF download + text extraction (@tool)
 │   ├── analyzer/
-│   │   ├── agent.py                 # AnalyzerAgent: MCP tools + cross-reference
-│   │   ├── app.py                   # Standalone HTTP entry point (port 8088)
-│   │   ├── Dockerfile               # Container (python:3.12-slim)
-│   │   └── requirements.txt         # Deps: agent-framework (no oci/pypdf)
-│   ├── requirements.txt             # v2.0 Python deps (agent-framework, azure-identity)
-│   ├── agent.yaml                   # Foundry agent metadata
-│   ├── Dockerfile                   # v2.0 workflow container (python:3.12-slim, port 8088)
-│   └── .env                         # Environment variables (production MCP URL)
+│   │   └── agent.py                 # AnalyzerAgent instructions (MCP tools in mcp_bridge)
+│   └── __init__.py
 │
 ├── jde-mcp-server-template/         # JDE MCP Server (git subtree)
 │   └── src/
-│       ├── tools/integrity.ts       # 4 new AP/GL integrity tools
-│       ├── schemas/tools.ts         # Zod schemas (including new integrity schemas)
-│       ├── data/dictionary.json     # v1.2.0 — added F0411, F0902, F0901
-│       └── index.ts                 # Tool registration (includes integrity layer)
+│       ├── tools/integrity.ts       # 4 AP/GL integrity tools
+│       ├── schemas/tools.ts         # Zod schemas (integrity + generic)
+│       ├── data/dictionary.json     # F0411, F0902, F0901
+│       └── index.ts                 # Tool registration
+│
+├── tests/                           # Integration tests
+│   ├── test_mcp.py                  # MCP server tests
+│   └── test_workflow_local.py       # Local workflow test
 │
 ├── ARCHITECTURE.md                  # This document
 ├── PLAN.md                          # Project log and decision record
-└── ingest/                          # Sample report PDFs for testing
+└── TECH-STACK.md                    # Technology inventory
 ```
 
 ---
 
-*v2.0 architecture documented on April 11, 2025. MCP deployed to Azure Container Apps on April 11, 2026.*
+*Architecture documented on April 12, 2026.*

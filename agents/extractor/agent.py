@@ -4,14 +4,13 @@ This agent has ONE tool: download_and_extract_pdf.
 The LLM then analyzes the raw text to produce a structured JSON extraction
 that the AnalyzerAgent can use for cross-referencing against live JDE data.
 """
-import asyncio
 import base64
 import io
 import os
 
 import oci
 from pypdf import PdfReader
-from agent_framework import tool
+from oci.addons.adk import tool
 
 # ──────────────────────────────────────────────────────────────
 # OCI Object Storage configuration (matches func.py / quickstart.py)
@@ -66,17 +65,14 @@ def _extract_text(pdf_bytes: bytes) -> str:
 # ──────────────────────────────────────────────────────────────
 
 @tool
-async def download_and_extract_pdf(object_name: str) -> str:
+def download_and_extract_pdf(object_name: str) -> str:
     """Download a PDF from OCI Object Storage and extract its full text.
 
     Args:
         object_name: The name of the PDF file in the OCI bucket
                      (e.g. 'R047001A_ZJDE0001_588_PDF.pdf').
-
-    Returns:
-        Extracted text from all pages of the PDF, with page markers.
     """
-    pdf_bytes = await asyncio.to_thread(_download_pdf, object_name)
+    pdf_bytes = _download_pdf(object_name)
     return _extract_text(pdf_bytes)
 
 
