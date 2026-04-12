@@ -88,3 +88,27 @@
 ### Always .gitignore .env files
 - `.env` files with credentials must be in `.gitignore`
 - The root `.gitignore` didn't have `.env` — we added it
+
+## JDE Email Integration (CL001_SimpleEmailJob)
+
+### JDE rejects `style=` attributes in HTML
+- `CL001_SimpleEmailJob` has a strict HTML sanitizer that flags `style=` as unsafe
+- Also rejects: `<!DOCTYPE>`, `<html>`, `<head>`, `<body>`, `<meta>`, `<title>`, `<style>` blocks
+- Also rejects: HTML entities (`&#9888;`, `&#10003;`, `&mdash;`, `&bull;`), `role="presentation"`, CSS functions (`linear-gradient()`, `box-shadow`)
+- **Solution**: Use ONLY old-school HTML 4 attributes:
+  - `bgcolor`, `width`, `align`, `valign`, `cellpadding`, `cellspacing` on tables
+  - `<font color="..." size="...">` for text color/size
+  - `<b>`, `<i>`, `<br>`, `<hr>` for formatting
+  - No `<span>`, `<code>`, `<pre>` tags
+
+### LLM outputs plain text titles instead of markdown headers
+- Without explicit instructions, the LLM sometimes writes `Executive Summary\n` instead of `## Executive Summary`
+- Plain text titles don't generate `<h2>` tags → no bold in HTML output
+- **Fix**: Add "Markdown Formatting (CRITICAL)" section to agent instructions requiring `## Section Title` syntax
+- Include explicit WRONG/RIGHT examples in the instructions
+
+### Email layout spacing issues
+- `cellpadding` is only valid on `<table>` elements, NOT on `<td>` — email clients ignore it on `<td>`
+- Fixed-width tables (e.g. `width="680"`) create grey margins in email clients
+- Wrapper tables (`bgcolor="#f4f5f7"`) add unnecessary padding above content
+- **Fix**: Use flat stacked tables at `width="100%"` with `cellpadding` on the `<table>`, not `<td>`

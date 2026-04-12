@@ -374,16 +374,23 @@ Content-Type: application/json
 ```json
 {
   "checkerResponse": "Yes",
-  "analysisResponse": "This JD Edwards R007011 report indicates significant integrity issues..."
+  "analysisResponse": "<table width=\"100%\" ...>...JDE-safe HTML email body...</table>"
 }
 ```
+
+The `analysisResponse` field contains **JDE-safe HTML** (compatible with `CL001_SimpleEmailJob`):
+- Zero `style=` attributes — uses only `bgcolor`, `width`, `align`, `cellpadding`, `cellspacing`
+- Text styling via `<font color=\"...\" size=\"...\">` and `<b>`/`<i>` tags
+- No document-level tags (`<html>`, `<head>`, `<body>`, `<style>`)
+- No `<span>`, `<code>`, `<pre>` tags
+- Markdown from the LLM is converted to HTML, then sanitized by `_sanitize_html_for_jde()`
 
 ### Response (Success — empty report)
 
 ```json
 {
   "checkerResponse": "No",
-  "analysisResponse": "No data found, analysis skipped."
+  "analysisResponse": "<table width=\"100%\" ...>...No discrepancies found...</table>"
 }
 ```
 
@@ -674,7 +681,7 @@ OCIFunction/
 ├── requirements.txt                 # v1.0 Python deps (fdk, oci, pypdf)
 ├── Dockerfile                       # v1.0 OCI Function container
 ├── func.yaml                        # v1.0 Function metadata
-├── docker-compose.yml               # v2.0 Local dev: 3 services (mcp, extractor, analyzer)
+├── docker-compose.yml               # v2.0 Local dev: 4 services (mcp, extractor, analyzer, api)
 ├── .env.example                     # v2.0 Root env template for docker-compose
 │
 ├── agents/                          # v2.0 Foundry Multi-Agent System

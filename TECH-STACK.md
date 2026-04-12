@@ -33,6 +33,7 @@
 | **Container** | Docker | python:3.12-slim | Slim image for Foundry Agent Service deployment |
 | **API Framework** | FastAPI | >= 0.115.0 | Async REST wrapper for agent pipeline — exposes v1.0 JDE Orchestration contract (`POST /v1/analyze`) |
 | **ASGI Server** | uvicorn | >= 0.30.0 | Production ASGI server for FastAPI (standard extras for auto-reload in dev) |
+| **Markdown→HTML** | markdown | >= 3.6 | Converts LLM markdown output to HTML for JDE email integration (`CL001_SimpleEmailJob`) |
 | **Environment** | python-dotenv | >= 1.0.0 | `load_dotenv(override=False)` — env file for local dev, Foundry sets vars in production |
 
 ### JDE MCP Server Layer
