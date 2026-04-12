@@ -10,6 +10,7 @@ Usage:
 """
 import asyncio
 import os
+import time
 import logging
 
 from dotenv import load_dotenv
@@ -17,10 +18,22 @@ from dotenv import load_dotenv
 load_dotenv(override=False)
 
 from azure.identity.aio import DefaultAzureCredential
+from azure.core.credentials import AccessToken
 from agent_framework.azure import AzureAIClient
 from azure.ai.agentserver.agentframework import from_agent_framework
 
 from agent import download_and_extract_pdf, EXTRACTOR_INSTRUCTIONS
+
+
+class _StaticTokenCredential:
+    def __init__(self, token: str):
+        self._token = token
+
+    async def get_token(self, *scopes, **kwargs) -> AccessToken:
+        return AccessToken(self._token, int(time.time()) + 3600)
+
+    async def close(self):
+        pass
 
 # download_and_extract_pdf is already a FunctionTool via @tool decorator
 
@@ -38,7 +51,8 @@ async def main():
 
     logger.info(f"ExtractorAgent starting — endpoint={endpoint}, model={model}")
 
-    credential = DefaultAzureCredential()
+    static_token = os.getenv("FOUNDRY_TOKEN")
+    credential = _StaticTokenCredential(static_token) if static_token else DefaultAzureCredential()
     try:
         client = AzureAIClient(
             project_endpoint=endpoint,

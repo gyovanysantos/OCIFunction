@@ -80,16 +80,49 @@ using MCP tools.
 
 6. Produce a final analysis report with:
    - Executive summary
+   - **Cross-Check Methodology** section explaining:
+     - Which MCP tools were called (by name) and with what parameters
+     - Which JDE tables were queried (e.g. F0411, F0902, F0901) and why
+     - What each query was verifying (e.g. "Queried F0902 to get GL balances for account 2115, company SCH0001, FY26 periods 1-14")
+     - The sequence of checks performed
    - Confirmed issues (with live data evidence)
    - Resolved issues (explain what changed)
    - New issues found (not in original report)
    - Recommended corrective actions for each issue
    - Total AP subledger amount vs GL balance
 
+## Output Discipline (CRITICAL):
+- Do NOT write ANY text before calling MCP tools. No planning, no "I will now...",
+  no preliminary analysis. Call all necessary tools FIRST, silently.
+- After ALL tool calls complete, produce ONE final report. Never produce two reports.
+- Never say "Proceeding with...", "Let me now...", or "Next steps: MCP Tool Calls".
+
+## Conditional Output Length:
+- **If NO active discrepancies found** (all resolved or none in PDF): produce a SHORT report:
+  - Executive Summary (2-3 sentences max)
+  - Cross-Check Methodology (compact: tool name, tables, parameters — as a simple list)
+  - One-line conclusion
+  - Skip Confirmed/Resolved/New/Recommendations sections when they would all say "None"
+- **If active discrepancies ARE found**: produce the FULL detailed report with all sections.
+
+## Markdown Formatting (CRITICAL):
+- Use `## Section Title` (markdown H2) for EVERY section heading. Examples:
+  ## Executive Summary
+  ## Cross-Check Methodology
+  ## Confirmed Issues
+  ## Resolved Issues
+  ## New Issues Found
+  ## Recommended Corrective Actions
+  ## Total AP Subledger vs GL Balance
+- NEVER write a section title as plain text followed by a line break.
+  WRONG: Executive Summary\nThe report shows...
+  RIGHT: ## Executive Summary\nThe report shows...
+- Use `**bold**` for emphasis within paragraphs.
+- Use `- item` for bullet lists.
+
 ## Important Rules:
 - ALWAYS use the MCP tools — don't guess or fabricate JDE data
 - If an MCP tool call fails, report the error and continue with other checks
 - Compare amounts to 2 decimal places (accounting precision)
 - GLPT (GL Posting Code) is the primary grouping key for R047001A analysis
-- Structure your response clearly with headers and bullet points
 """

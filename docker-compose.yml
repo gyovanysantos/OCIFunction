@@ -52,11 +52,13 @@ services:
     environment:
       FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
       FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}
+      FOUNDRY_TOKEN: ${FOUNDRY_TOKEN:-}
       OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
       OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
     volumes:
       # Mount OCI config for PDF downloads (local dev only)
-      - ${HOME}/.oci:/root/.oci:ro
+      # Use USERPROFILE on Windows (HOME is not set)
+      - ${USERPROFILE}/.oci:/root/.oci:ro
     restart: unless-stopped
 
   # ── AnalyzerAgent (Python — MCP-powered JDE cross-reference) ─
@@ -70,6 +72,7 @@ services:
     environment:
       FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
       FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}
+      FOUNDRY_TOKEN: ${FOUNDRY_TOKEN:-}
       # Points to the MCP container via Docker network
       MCP_SERVER_URL: http://mcp:3000/mcp
     depends_on:
@@ -89,11 +92,12 @@ services:
     environment:
       FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
       FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}
+      FOUNDRY_TOKEN: ${FOUNDRY_TOKEN:-}
       OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
       OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
       MCP_SERVER_URL: http://mcp:3000/mcp
     volumes:
-      - ${HOME}/.oci:/root/.oci:ro
+      - ${USERPROFILE}/.oci:/root/.oci:ro
     depends_on:
       mcp:
         condition: service_healthy
