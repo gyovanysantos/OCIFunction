@@ -98,7 +98,7 @@ export const JdeApVoucherQuerySchema = z.object({
   dateTo: z.string().optional()
     .describe("GL date range end (YYYY-MM-DD)"),
   fiscalYear: z.number().int().optional()
-    .describe("Fiscal year filter (FY), e.g. 26 for 2026"),
+    .describe("Fiscal year filter (FY), e.g. 2026"),
   period: z.number().int().min(1).max(14).optional()
     .describe("GL period filter (PN), 1-14"),
   maxRows: z.number().int().min(1).max(500).default(100)
@@ -117,7 +117,7 @@ export const JdeGlBalanceQuerySchema = z.object({
   ledgerType: z.string().default("AA")
     .describe("Ledger type: AA=Actual (default), AU=Units, CA=Budget"),
   fiscalYear: z.number().int().optional()
-    .describe("Fiscal year (FY), e.g. 26 for 2026"),
+    .describe("Fiscal year (FY), e.g. 2026"),
   maxRows: z.number().int().min(1).max(500).default(100)
     .describe("Max rows to return (default 100)"),
 }).strict();
@@ -145,7 +145,7 @@ export const JdeApGlIntegrityCheckSchema = z.object({
   company: z.string()
     .describe("Company code (CO). Required for integrity check."),
   fiscalYear: z.number().int()
-    .describe("Fiscal year to check (FY), e.g. 26 for 2026. Required."),
+    .describe("Fiscal year to check (FY), e.g. 2026. Required."),
   periodFrom: z.number().int().min(1).max(14)
     .describe("Starting period (PN). Required."),
   periodTo: z.number().int().min(1).max(14)
@@ -167,3 +167,56 @@ export type JdeApVoucherQueryInput = z.infer<typeof JdeApVoucherQuerySchema>;
 export type JdeGlBalanceQueryInput = z.infer<typeof JdeGlBalanceQuerySchema>;
 export type JdeGlDetailQueryInput = z.infer<typeof JdeGlDetailQuerySchema>;
 export type JdeApGlIntegrityCheckInput = z.infer<typeof JdeApGlIntegrityCheckSchema>;
+
+// ──────────────────────────────────────────────────────────────
+// Batch / Unposted Batches Tools (R007011 support)
+// ──────────────────────────────────────────────────────────────
+
+export const JdeBatchQuerySchema = z.object({
+  company: z.string().optional()
+    .describe("Company code (KCO)"),
+  batchNumber: z.number().int().optional()
+    .describe("Specific batch number (ICU)"),
+  batchType: z.string().optional()
+    .describe("Batch type (ICUT): G=GL, V=Voucher, W=Time Entry, K=Receipts, etc."),
+  dateFrom: z.string().optional()
+    .describe("GL date range start (YYYY-MM-DD) for DGJ (GL date)"),
+  dateTo: z.string().optional()
+    .describe("GL date range end (YYYY-MM-DD) for DGJ (GL date)"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeBatchTransactionQuerySchema = z.object({
+  batchNumber: z.number().int().optional()
+    .describe("Batch number (ICU) to retrieve transactions for"),
+  batchType: z.string().optional()
+    .describe("Batch type (ICUT): G=GL, V=Voucher, etc."),
+  company: z.string().optional()
+    .describe("Company code (KCO)"),
+  documentNumber: z.number().int().optional()
+    .describe("Document number (DOC) within the batch"),
+  fiscalYear: z.number().int().optional()
+    .describe("Fiscal year (FY)"),
+  period: z.number().int().min(1).max(14).optional()
+    .describe("GL period (PN), 1-14"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeUnpostedBatchCheckSchema = z.object({
+  company: z.string().optional()
+    .describe("Company code (KCO). Optional filter."),
+  batchType: z.string().optional()
+    .describe("Batch type to check (ICUT): G=GL, V=Voucher. Omit for ALL types."),
+  dateFrom: z.string().optional()
+    .describe("Only check batches with GL date on or after this date (YYYY-MM-DD)"),
+  dateTo: z.string().optional()
+    .describe("Only check batches with GL date on or before this date (YYYY-MM-DD)"),
+  maxRows: z.number().int().min(1).max(500).default(200)
+    .describe("Max rows to return (default 200)"),
+}).strict();
+
+export type JdeBatchQueryInput = z.infer<typeof JdeBatchQuerySchema>;
+export type JdeBatchTransactionQueryInput = z.infer<typeof JdeBatchTransactionQuerySchema>;
+export type JdeUnpostedBatchCheckInput = z.infer<typeof JdeUnpostedBatchCheckSchema>;

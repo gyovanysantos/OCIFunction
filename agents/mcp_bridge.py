@@ -16,6 +16,22 @@ from oci.addons.adk import tool
 
 logger = logging.getLogger(__name__)
 
+
+def _validate_company(company: Optional[str]) -> Optional[str]:
+    """Validate company code format. JDE company codes are 5-digit strings like '00001'.
+    If the value looks like a name (contains letters other than digits), return None
+    so the tool queries all companies instead of returning 0 results."""
+    if company is None:
+        return None
+    stripped = company.strip()
+    if not stripped:
+        return None
+    # Valid JDE company codes are numeric strings (e.g. "00001", "00060")
+    if stripped.isdigit():
+        return stripped.zfill(5)  # Pad to 5 digits if needed
+    logger.warning(f"Invalid company code '{company}' (not numeric) — omitting from query")
+    return None
+
 _MCP_HEADERS = {
     "Content-Type": "application/json",
     "Accept": "application/json, text/event-stream",
@@ -200,3 +216,94 @@ def jde_ap_gl_integrity_check(
     if glOffset is not None:
         args["glOffset"] = glOffset
     return _call_mcp_tool("jde_ap_gl_integrity_check", args)
+
+
+# ──────────────────────────────────────────────────────────────
+# ADK @tool wrappers — R007011 (Unposted Batches) tools
+# ──────────────────────────────────────────────────────────────
+
+
+@tool
+def jde_batch_query(
+    company: Optional[str] = None,
+    batchNumber: Optional[int] = None,
+    batchType: Optional[str] = None,
+    dateFrom: Optional[str] = None,
+    dateTo: Optional[str] = None,
+    maxRows: int = 100,
+) -> str:
+    """Query F0911 (Account Ledger) for batch transaction data.
+
+    Use this to look up transactions within batches by company, batch number,
+    batch type, or date range. Essential for R007011 batch verification.
+
+    Args:
+        company: Company code (KCO), e.g. '00001'
+        batchNumber: Specific batch number (ICU) to look up
+        batchType: Batch type: G=GL, V=Voucher, W=Time Entry, K=Receipts, I=Invoice
+        dateFrom: GL date range start (YYYY-MM-DD)
+        dateTo: GL date range end (YYYY-MM-DD)
+        maxRows: Max rows to return (default 100)
+    """
+    company = _validate_company(company)
+    args = {k: v for k, v in {
+        "company": company, "batchNumber": batchNumber,
+        "batchType": batchType, "dateFrom": dateFrom,
+        "dateTo": dateTo, "maxRows": maxRows,
+    }.items() if v is not None}
+    return _call_mcp_tool("jde_batch_query", args)
+
+
+@tool
+def jde_batch_transaction_query(
+    batchNumber: int,
+    batchType: Optional[str] = None,
+    company: Optional[str] = None,
+    maxRows: int = 100,
+) -> str:
+    """Query F0911 (Account Ledger) for transactions within a specific batch.
+
+    Use this to drill into the individual journal entry lines of a batch.
+
+    Args:
+        batchNumber: Batch number (ICU) — required
+        batchType: Batch type (ICUT), e.g. 'G' for GL
+        company: Company code (KCO)
+        maxRows: Max rows to return (default 100)
+    """
+    company = _validate_company(company)
+    args: dict = {"batchNumber": batchNumber, "maxRows": maxRows}
+    if batchType is not None:
+        args["batchType"] = batchType
+    if company is not None:
+        args["company"] = company
+    return _call_mcp_tool("jde_batch_transaction_query", args)
+
+
+@tool
+def jde_unposted_batch_check(
+    company: Optional[str] = None,
+    batchType: Optional[str] = None,
+    dateFrom: Optional[str] = None,
+    dateTo: Optional[str] = None,
+    maxRows: int = 200,
+) -> str:
+    """Verify batch data from R007011 against live JDE F0911 transaction data.
+
+    Queries F0911 (Account Ledger) for batch transactions, groups by batch number,
+    returns per-batch summary with transaction count, total amounts, and date ranges.
+    This is the PRIMARY tool for R007011 batch verification.
+
+    Args:
+        company: Company code (KCO). Optional filter.
+        batchType: Batch type filter: G=GL, V=Voucher, W=Time Entry, K=Receipts, I=Invoice
+        dateFrom: GL date range start (YYYY-MM-DD)
+        dateTo: GL date range end (YYYY-MM-DD)
+        maxRows: Max rows to return (default 200)
+    """
+    company = _validate_company(company)
+    args = {k: v for k, v in {
+        "company": company, "batchType": batchType,
+        "dateFrom": dateFrom, "dateTo": dateTo, "maxRows": maxRows,
+    }.items() if v is not None}
+    return _call_mcp_tool("jde_unposted_batch_check", args)

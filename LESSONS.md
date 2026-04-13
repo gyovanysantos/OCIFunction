@@ -76,6 +76,35 @@
 - Without this, you get "Not Acceptable" error
 - Protocol version: `2025-03-26` (or server negotiates)
 
+## OCI ADK (Agent Development Kit)
+
+### agent.run() needs event loop when called from asyncio.to_thread()
+- `asyncio.to_thread()` runs sync functions in a worker thread — that thread has NO event loop
+- OCI ADK `agent.run()` internally needs an asyncio event loop
+- **Error**: `RuntimeError: There is no current event loop in thread 'asyncio_0'`
+- **Fix**: Before calling `agent.run()`, ensure an event loop exists:
+  ```python
+  try:
+      asyncio.get_event_loop()
+  except RuntimeError:
+      asyncio.set_event_loop(asyncio.new_event_loop())
+  ```
+
+### First-time setup() is slow (5-10 min)
+- `agent.setup()` syncs local @tool functions to OCI GenAI Agents Service
+- OCI creates tool resources that go through CREATING → ACTIVE lifecycle
+- Each tool takes 1-3 minutes; multiple tools compound
+- **After first setup, tools persist** — subsequent restarts are fast
+
+### OCI GenAI Agent limits
+- jdee1 compartment limit: ~3 agents
+- Deleted agents count against limit temporarily (soft-delete cooldown)
+- Must delete endpoint → delete tools → delete agent (in that order)
+
+### CreateAgentEndpointDetails requires compartment_id
+- Even though agent_id implies the compartment, the `compartment_id` parameter is required
+- Without it: `InvalidParameter: compartmentId is not available`
+
 ## JDE AIS
 
 ### F0901 — FY column alias not found

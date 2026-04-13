@@ -20,6 +20,13 @@ import {
   registerApGlIntegrityCheck,
 } from "./tools/integrity.js";
 
+// Tool registrations — Batch / Unposted Batches tools (R007011)
+import {
+  registerBatchQuery,
+  registerBatchTransactionQuery,
+  registerUnpostedBatchCheck,
+} from "./tools/batch.js";
+
 // Tool registrations — Generic orchestration (escape hatch)
 import { registerOrchestrationTool } from "./tools/orchestration.js";
 
@@ -48,6 +55,11 @@ registerApVoucherQuery(server);        // jde_ap_voucher_query
 registerGlBalanceQuery(server);        // jde_gl_balance_query
 registerGlDetailQuery(server);         // jde_gl_detail_query
 registerApGlIntegrityCheck(server);    // jde_ap_gl_integrity_check
+
+// ── Layer 2b: Batch / Unposted Batches (R007011) ─────────────
+registerBatchQuery(server);            // jde_batch_query
+registerBatchTransactionQuery(server); // jde_batch_transaction_query
+registerUnpostedBatchCheck(server);    // jde_unposted_batch_check
 
 // ── Layer 3: Generic (fallback) ───────────────────────────────
 registerQueryTool(server);             // jde_query_table
