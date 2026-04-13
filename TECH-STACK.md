@@ -1,27 +1,10 @@
 # JDE Integrity Report AI Analyzer — Tech Stack
 
-> **Last Updated**: April 11, 2025
+> **Last Updated**: April 13, 2026
 
 ---
 
-## v1.0 — OCI Serverless Function (Production)
-
-| Component | Technology | Version | Why |
-|-----------|-----------|---------|-----|
-| **Runtime** | Python | 3.11 | Matches OCI Functions base image; mature ecosystem for data processing |
-| **Function Framework** | OCI FDK (`fdk`) | >= 0.1.105 | Required for OCI Functions deployment — provides the `handler(ctx, data)` entry point pattern |
-| **OCI SDK** | `oci` Python SDK | >= 2.168.0 | Official Oracle SDK for Object Storage downloads and GenAI inference calls |
-| **PDF Extraction** | `pypdf` | >= 4.0.0 | Pure-Python PDF reader — no native dependencies, works in any container; extracts text from all pages |
-| **LLM** | Google Gemini 2.5 Flash | On-demand (OCI) | Massive context window (~1M tokens) handles 50+ page reports; Flash variant is cost-efficient and fast |
-| **Container** | Docker | fnproject/python:3.11 | OCI Functions requires fn-project base images for packaging |
-| **API Gateway** | OCI API Gateway | — | HTTPS termination, routing, and rate limiting for the function endpoint |
-| **Object Storage** | OCI Object Storage | — | Stores Integrity Report PDFs uploaded by JDE Orchestrations |
-
----
-
-## v2.0 — Multi-Agent Architecture (In Development)
-
-### Foundry Agent Layer
+## Foundry Agent Layer
 
 | Component | Technology | Version | Why |
 |-----------|-----------|---------|-----|
@@ -78,10 +61,8 @@
 
 | Decision | Rationale |
 |----------|-----------|
-| **Direct LLM inference (v1.0)** | No RAG, no Knowledge Bases — each report is self-contained and fits within the LLM context window |
-| **Gemini 2.5 Flash for v1.0** | Cost-efficient, fast, 1M token context — ideal for large PDF analysis on OCI |
-| **Azure OpenAI for v2.0 agents** | Required by Foundry Agent Service; GPT-4o provides excellent reasoning for multi-step tool use |
+| **Azure OpenAI for agents** | Required by Foundry Agent Service; GPT-4.1 provides excellent reasoning for multi-step tool use |
 | **MCP for JDE integration** | Open standard for LLM tool calling; enables the AnalyzerAgent to query live JDE data without custom integration code |
 | **Git subtree (not submodule)** | Subtree keeps the MCP server code inline — easier to modify, no submodule init required for contributors |
 | **Separate agents (not monolith)** | ExtractorAgent and AnalyzerAgent have different concerns (PDF processing vs. data cross-reference) — separation enables independent testing and iteration |
-| **OCI SDK for PDF access** | Simplest approach — reuses existing `~/.oci/config` pattern from v1.0; no need to mirror PDFs to Azure |
+| **OCI SDK for PDF access** | Simplest approach — reuses existing `~/.oci/config` pattern; no need to mirror PDFs to Azure |
