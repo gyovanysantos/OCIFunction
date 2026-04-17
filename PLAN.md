@@ -1,10 +1,50 @@
-# OCI GenAI — JDE Integrity Report Analyzer (Direct LLM Inference)
+# JDE Integrity Report AI Analyzer — Multi-Agent Architecture (OCI ADK)
 
 ## Summary
-OCI Function that analyzes JDE Integrity Reports stored in Object Storage.
-Downloads the PDF directly, extracts text with pypdf, checks for content (code-based checker),
-and sends the full document text to OCI GenAI Inference API (google.gemini-2.5-flash) for analysis.
-No Agent or Knowledge Base — direct LLM inference with the document text in the prompt.
+Multi-agent system using OCI Agent Development Kit (ADK) that analyzes JDE Integrity Reports.
+ExtractorAgent downloads PDF from OCI Object Storage, extracts text with pypdf, and produces structured JSON.
+AnalyzerAgent cross-references findings against live JDE data via MCP tools.
+
+> **Note**: v1.0 (OCI Function with direct LLM inference) has been deprecated and removed. Historical logs below are preserved for reference.
+
+---
+
+## Session Log: 2026-04-12 — JDE Email Integration & HTML Compatibility
+
+### What Was Done
+1. **JDE CL001_SimpleEmailJob HTML Compatibility** (3 iterations):
+   - **Attempt 1**: Removed document-level tags (`<!DOCTYPE>`, `<html>`, `<head>`, `<body>`, `<style>`) and HTML entities → Still rejected
+   - **Attempt 2**: Replaced inline `style=` attributes with old-school HTML approach → Still rejected (JDE rejects `style=` attribute itself)
+   - **Attempt 3 (SUCCESS)**: Rewrote entire template with **zero `style=` attributes**:
+     - `bgcolor`, `width`, `align`, `cellpadding`, `cellspacing` on tables
+     - `<font color="..." size="...">` for text styling
+     - `<b>`, `<i>`, `<br>`, `<hr>` for formatting
+     - New `_sanitize_html_for_jde()` function strips `style=`, converts `<h1>`/`<h2>`/`<h3>` to `<font><b>`, strips `<span>`/`<code>`/`<pre>` tags
+   - JDE `CL001_SimpleEmailJob` now accepts the HTML ✅
+
+2. **Analyzer Output Formatting**:
+   - Added **Markdown Formatting (CRITICAL)** section to `ANALYZER_INSTRUCTIONS` requiring `## Section Title` for every heading
+   - Without this, LLM sometimes outputs plain text titles that don't convert to bold HTML
+   - Cross-Check Methodology section already added in prior session
+
+3. **Email Layout Improvements**:
+   - Removed grey wrapper table (`bgcolor="#f4f5f7"`) and fixed-width `width="680"` constraint
+   - Changed to 3 flat tables (header, body, footer) at `width="100%"` — content fills full email width
+   - Removed invalid `cellpadding` on `<td>` elements (only valid on `<table>`)
+   - Blue header (`bgcolor="#1a365d"`) now starts immediately at top — no empty space
+
+4. **Subtitle Fix**: Changed `{report_type} - Company {company}` to `{report_type} - {company}` (the second part is JDE environment code, not company name)
+
+5. **Docker Compose**: 4 services (mcp, extractor, analyzer, api) running locally — full pipeline tested end-to-end
+
+### Key Files Modified
+- `agents/api.py` — HTML template, `_sanitize_html_for_jde()`, badge definitions
+- `agents/analyzer/agent.py` — Markdown Formatting rules in ANALYZER_INSTRUCTIONS
+- `docker-compose.yml` — `${USERPROFILE}/.oci` volume mount fix (Windows)
+
+### Branch Operations
+- Committed and pushed to `development`
+- Created and pushed new branch `jde_ir_cantex` to remote
 
 ---
 

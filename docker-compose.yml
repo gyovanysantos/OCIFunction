@@ -1,18 +1,16 @@
 # ──────────────────────────────────────────────────────────────
 # JDE Integrity Analyzer — Local Development Stack
 # ──────────────────────────────────────────────────────────────
-# 4 services: MCP server, ExtractorAgent, AnalyzerAgent, API
+# 2 services: MCP server + API (agents run in-process via OCI ADK)
 #
 # Usage:
-#   docker compose up --build          # build & start all 4
+#   docker compose up --build          # build & start both
 #   docker compose up --build api      # rebuild & start API only (+ MCP dep)
 #   docker compose up mcp              # start MCP server only
 #   docker compose logs -f api         # follow API logs
 #
 # Ports:
 #   MCP Server:     http://localhost:3000  (health: /health, mcp: /mcp)
-#   ExtractorAgent: http://localhost:8088  (Foundry /responses API)
-#   AnalyzerAgent:  http://localhost:8089  (Foundry /responses API)
 #   API Wrapper:    http://localhost:8080  (JDE Orchestration: /v1/analyze)
 # ──────────────────────────────────────────────────────────────
 
@@ -41,44 +39,9 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # ── ExtractorAgent (Python — PDF download + text extraction) ─
-  extractor:
-    build:
-      context: ./agents/extractor
-      dockerfile: Dockerfile
-    container_name: jde-extractor-agent
-    ports:
-      - "8088:8088"
-    environment:
-      FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
-      FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}
-      OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
-      OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
-    volumes:
-      # Mount OCI config for PDF downloads (local dev only)
-      - ${HOME}/.oci:/root/.oci:ro
-    restart: unless-stopped
-
-  # ── AnalyzerAgent (Python — MCP-powered JDE cross-reference) ─
-  analyzer:
-    build:
-      context: ./agents/analyzer
-      dockerfile: Dockerfile
-    container_name: jde-analyzer-agent
-    ports:
-      - "8089:8088"
-    environment:
-      FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
-      FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}
-      # Points to the MCP container via Docker network
-      MCP_SERVER_URL: http://mcp:3000/mcp
-    depends_on:
-      mcp:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # ── API Wrapper (Python — JDE Orchestration endpoint) ────────
-  # Runs both agents IN-PROCESS; returns {checkerResponse, analysisResponse}
+  # ── API + Agents (Python — OCI ADK deterministic workflow) ──
+  # Runs ExtractorAgent + AnalyzerAgent IN-PROCESS via OCI ADK
+  # Returns {checkerResponse, analysisResponse} for JDE Orchestration
   api:
     build:
       context: ./agents
@@ -87,13 +50,23 @@ services:
     ports:
       - "8080:8080"
     environment:
-      FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
-      FOUNDRY_MODEL_DEPLOYMENT_NAME: ${FOUNDRY_MODEL_DEPLOYMENT_NAME}
+      # OCI ADK auth (api_key reads ~/.oci/config)
+      OCI_AUTH_TYPE: ${OCI_AUTH_TYPE:-api_key}
+      OCI_REGION: ${OCI_REGION:-us-phoenix-1}
+      OCI_PROFILE: ${OCI_PROFILE:-DEFAULT}
+      # Agent endpoint OCIDs (from OCI Console → GenAI Agents)
+      EXTRACTOR_AGENT_ENDPOINT_ID: ${EXTRACTOR_AGENT_ENDPOINT_ID}
+      ANALYZER_AGENT_ENDPOINT_ID: ${ANALYZER_AGENT_ENDPOINT_ID}
+      # OCI Object Storage (PDF downloads)
       OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
       OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
+      # MCP server URL (Docker internal network)
       MCP_SERVER_URL: http://mcp:3000/mcp
+      # ADK debug logging (set to DEBUG for tool traces)
+      ADK_LOG_LEVEL: ${ADK_LOG_LEVEL:-INFO}
     volumes:
-      - ${HOME}/.oci:/root/.oci:ro
+      # Mount OCI config for auth + PDF downloads (local dev only)
+      - ${USERPROFILE}/.oci:/root/.oci:ro
     depends_on:
       mcp:
         condition: service_healthy

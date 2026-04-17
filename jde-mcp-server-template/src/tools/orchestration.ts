@@ -13,7 +13,7 @@ export function registerOrchestrationTool(server: McpServer): void {
       title: "Call JDE Orchestration",
       description: `Invoke a named JDE Orchestration via the AIS REST API.
 
-Use this for WRITE/TRANSACTIONAL operations — creating sales orders, updating records, or running multi-step business processes that have been pre-built as JDE Orchestrations in the Orchestrator Studio.
+Use this for WRITE/TRANSACTIONAL operations — updating records or running multi-step business processes that have been pre-built as JDE Orchestrations in the Orchestrator Studio.
 
 ⚠️ This tool can MODIFY DATA in JDE. Use with caution and only when the user explicitly requests a create/update/delete operation.
 
@@ -24,13 +24,7 @@ Args:
   - inputs (object): Key-value map of input parameters expected by the orchestration
 
 Returns:
-  JSON response from the orchestration — structure depends on the specific orchestration's output definition.
-
-Examples:
-  - orchestrationName: "CreateSalesOrder"
-    inputs: { "Customer": "4242", "ItemNumber": "ABC123", "Quantity": "10", "BranchPlant": "M30" }
-  - orchestrationName: "UpdateOrderStatus"
-    inputs: { "OrderNumber": "12345", "NewStatus": "580" }`,
+  JSON response from the orchestration — structure depends on the specific orchestration's output definition.`,
       inputSchema: JdeCallOrchestrationSchema,
       annotations: {
         readOnlyHint: false,

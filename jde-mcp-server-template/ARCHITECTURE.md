@@ -2,10 +2,10 @@
 
 ## Overview
 
-TypeScript MCP (Model Context Protocol) server bridging Claude to JD Edwards EnterpriseOne via the AIS REST API. Implements Sales Order CRUD operations through a 5-layer tool architecture with dynamic table discovery.
+TypeScript MCP (Model Context Protocol) server bridging AI agents to JD Edwards EnterpriseOne via the AIS REST API. Implements AP/GL Integrity analysis tools and generic JDE queries through a 4-layer tool architecture with dynamic table discovery.
 
 ```
-User → Claude (reasoning) → MCP Server → AIS REST API → JDE EnterpriseOne
+Agent → MCP Server → AIS REST API → JDE EnterpriseOne
 ```
 
 ## Deployment Architecture
@@ -86,17 +86,16 @@ Push to main → GitHub Actions
 | `OCIR_PULL_USERNAME_B64` | Base64 registry pull username |
 | `OCIR_PULL_PASSWORD_B64` | Base64 registry pull password |
 
-## 5-Layer Tool Design
+## 4-Layer Tool Design
 
 | Layer | Purpose | Tools | Count |
 |-------|---------|-------|-------|
 | 0 – Dynamic Discovery | Live introspection of any JDE table | `jde_discover_table`, `jde_search_tables` | 2 |
-| 1 – Curated Dictionary | Static data dictionary lookups (5 curated tables) | `jde_dictionary_search`, `_list`, `_table` | 3 |
-| 2 – Curated SO CRUD | Sales Order operations with business rules | `jde_sales_order_inquiry`, `jde_create_sales_order`, `jde_update_sales_order`, `jde_add_sales_order_line`, `jde_cancel_sales_order` | 5 |
-| 3 – Supporting | Validation & availability checks | `jde_customer_lookup`, `jde_item_check` | 2 |
-| 4 – Generic | Escape hatch for any table or orchestration | `jde_query_table`, `jde_call_orchestration` | 2 |
+| 1 – Curated Dictionary | Static data dictionary lookups | `jde_dictionary_search`, `_list`, `_table` | 3 |
+| 2 – AP/GL Integrity | Curated tools for R047001A analysis | `jde_ap_voucher_query`, `jde_gl_balance_query`, `jde_gl_detail_query`, `jde_ap_gl_integrity_check` | 4 |
+| 3 – Generic | Escape hatch for any table or orchestration | `jde_query_table`, `jde_call_orchestration` | 2 |
 
-**Total: 14 tools**
+**Total: 11 tools**
 
 ### Layer 0 — How Dynamic Discovery Works
 
@@ -116,19 +115,17 @@ src/
   schemas/
     tools.ts            # All Zod input schemas for MCP tools (.strict() mode)
   services/
-    ais-client.ts       # AIS REST client — Basic Auth, data/form/orch calls
+    ais-client.ts       # AIS REST client — Basic Auth, data/orch calls
     dd-discovery.ts     # Layer 0 — live table introspection + F9210/F9200 enrichment
     dictionary.ts       # Dictionary service — load, search, list, resolve columns
-    orch-mapper.ts      # Maps tool inputs → orchestration payloads
   tools/
     discovery.ts        # Layer 0 — dynamic discovery tool registrations
     dictionary.ts       # Layer 1 — dictionary tool registrations
-    domain.ts           # Layer 2+3 — SO CRUD + lookup tool implementations
-    query.ts            # Layer 4 — generic table query tool
-    orchestration.ts    # Layer 4 — generic orchestration caller tool
+    integrity.ts        # Layer 2 — AP/GL integrity tools (R047001A)
+    query.ts            # Layer 3 — generic table query tool
+    orchestration.ts    # Layer 3 — generic orchestration caller tool
   data/
-    dictionary.json     # Curated data dictionary (F4211, F4201, F0101, F4101, F41021)
-    orchestrations.json # SO CRUD operation → orchestration name + field mapping
+    dictionary.json     # Curated data dictionary
 .github/
   workflows/
     ci.yml              # CI — build, lint, type-check on every PR

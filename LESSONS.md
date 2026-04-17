@@ -76,6 +76,35 @@
 - Without this, you get "Not Acceptable" error
 - Protocol version: `2025-03-26` (or server negotiates)
 
+## OCI ADK (Agent Development Kit)
+
+### agent.run() needs event loop when called from asyncio.to_thread()
+- `asyncio.to_thread()` runs sync functions in a worker thread — that thread has NO event loop
+- OCI ADK `agent.run()` internally needs an asyncio event loop
+- **Error**: `RuntimeError: There is no current event loop in thread 'asyncio_0'`
+- **Fix**: Before calling `agent.run()`, ensure an event loop exists:
+  ```python
+  try:
+      asyncio.get_event_loop()
+  except RuntimeError:
+      asyncio.set_event_loop(asyncio.new_event_loop())
+  ```
+
+### First-time setup() is slow (5-10 min)
+- `agent.setup()` syncs local @tool functions to OCI GenAI Agents Service
+- OCI creates tool resources that go through CREATING → ACTIVE lifecycle
+- Each tool takes 1-3 minutes; multiple tools compound
+- **After first setup, tools persist** — subsequent restarts are fast
+
+### OCI GenAI Agent limits
+- jdee1 compartment limit: ~3 agents
+- Deleted agents count against limit temporarily (soft-delete cooldown)
+- Must delete endpoint → delete tools → delete agent (in that order)
+
+### CreateAgentEndpointDetails requires compartment_id
+- Even though agent_id implies the compartment, the `compartment_id` parameter is required
+- Without it: `InvalidParameter: compartmentId is not available`
+
 ## JDE AIS
 
 ### F0901 — FY column alias not found
@@ -88,3 +117,27 @@
 ### Always .gitignore .env files
 - `.env` files with credentials must be in `.gitignore`
 - The root `.gitignore` didn't have `.env` — we added it
+
+## JDE Email Integration (CL001_SimpleEmailJob)
+
+### JDE rejects `style=` attributes in HTML
+- `CL001_SimpleEmailJob` has a strict HTML sanitizer that flags `style=` as unsafe
+- Also rejects: `<!DOCTYPE>`, `<html>`, `<head>`, `<body>`, `<meta>`, `<title>`, `<style>` blocks
+- Also rejects: HTML entities (`&#9888;`, `&#10003;`, `&mdash;`, `&bull;`), `role="presentation"`, CSS functions (`linear-gradient()`, `box-shadow`)
+- **Solution**: Use ONLY old-school HTML 4 attributes:
+  - `bgcolor`, `width`, `align`, `valign`, `cellpadding`, `cellspacing` on tables
+  - `<font color="..." size="...">` for text color/size
+  - `<b>`, `<i>`, `<br>`, `<hr>` for formatting
+  - No `<span>`, `<code>`, `<pre>` tags
+
+### LLM outputs plain text titles instead of markdown headers
+- Without explicit instructions, the LLM sometimes writes `Executive Summary\n` instead of `## Executive Summary`
+- Plain text titles don't generate `<h2>` tags → no bold in HTML output
+- **Fix**: Add "Markdown Formatting (CRITICAL)" section to agent instructions requiring `## Section Title` syntax
+- Include explicit WRONG/RIGHT examples in the instructions
+
+### Email layout spacing issues
+- `cellpadding` is only valid on `<table>` elements, NOT on `<td>` — email clients ignore it on `<td>`
+- Fixed-width tables (e.g. `width="680"`) create grey margins in email clients
+- Wrapper tables (`bgcolor="#f4f5f7"`) add unnecessary padding above content
+- **Fix**: Use flat stacked tables at `width="100%"` with `cellpadding` on the `<table>`, not `<td>`

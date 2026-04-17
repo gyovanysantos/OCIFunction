@@ -1,3 +1,73 @@
-{
-  "text": "## Step 1: Parse Extraction\n\n- **Report Type:** R047001A (AP to GL Integrity)\n- **Company:** 00001\n- **Fiscal Year/Periods:** NOT provided in extraction\n- **Discrepancies:**\n  - Accounts: 1.1890, 1.4110, 1.4110.BASE, 50.4110, 70.4110, 200.4110\n  - GL Offset: Mostly null, one with \"BASE\"\n  - Amount differences: All show substantial discrepancies.\n- **No explicit fiscal year/period provided.**\n\n## Step 2: Determine Tool Usage Inputs\n\nTo verify, I must run **jde_ap_gl_integrity_check** for company 00001.\n- Fiscal year and periods are NOT provided.\n- I cannot proceed without fiscal year and period \u2014 these are required for the MCP integrity check tool.\n\n### Action Plan:\n1. Attempt to use the most recent fiscal year if available in JDE for company 00001.\n2. Since periods are not specified, default to full fiscal year (periods 1\u201314).\n\n---\n\n### MCP Tool Call\nI will run the programmatic AP to GL integrity check for company 00001, full fiscal year (most recent; typically 2024 or 2025 if current date is mid-2024), periods 1\u201314.\n\n---\n\n#### First, check what fiscal years are available for company 00001 (to avoid incorrect assumptions).\n\n**Note:** If the integrity check tool requires a fiscal year and period, I must supply one. If not, I will proceed as above.\n\n# JDE Integrity Report Analysis \u2014 Company 00001 (Fiscal Year 24, Periods 1\u201314)\n\n## Executive Summary\n- The PDF report extracted by the ExtractorAgent lists AP to GL discrepancies for several accounts and offsets, but does **not specify fiscal year or period**.\n- Live JDE data (Fiscal Year 24, Periods 1\u201314) was checked using the MCP A/P to G/L integrity check tool.\n- **Result:** The JDE data shows only one discrepancy, and it is much smaller than those shown in the PDF.\n- **Conclusion:** The discrepancies reported in the PDF are **not currently reflected** in the live JDE data for fiscal year 24.\n\n---\n\n## Detailed Findings\n\n### Confirmed Issues (PDF matches JDE live data)\n- **None** \u2014 None of the PDF discrepancies are currently present in JDE for the selected fiscal year and periods.\n\n### Resolved Issues (PDF shows discrepancy, but JDE data is now balanced)\n- **All listed PDF discrepancies appear to be resolved.**\n    - Example: PDF reports $120,000 out-of-balance for account 1.1890, but JDE shows none.\n    - Other accounts (4110, BASE, 50.4110, 70.4110, 200.4110) with large discrepancies **do not appear in current JDE discrepancies**.\n\n### New Issues (Live JDE data shows discrepancies not in PDF)\n- **1 discrepancy found:**\n    - **GL Offset:** UNKNOWN\n    - **AP Gross Total:** $310.00\n    - **AP Open Total:** $310.00\n    - **GL Period Total:** $0.00\n    - **Difference:** $310.00\n    - **Voucher Count:** 3\n    - *Note: This discrepancy is minor compared to the PDF, and the account/offset does not directly match any PDF row.*\n\n---\n\n## Evidence: AP vs GL Amounts\n\n- **PDF totals (example):**\n    - 1.1890: AP $500.00, GL $120,500.00, Diff $120,000.00\n    - 1.4110: AP $4,270,668.91, GL $4,903,437.41, Diff $632,768.50\n    - ... (see extraction text for further amounts)\n\n- **Live JDE (FY24, Periods 1\u201314):**\n    - Only 1 offset group (\u201cUNKNOWN\u201d) with AP $310.00, GL $0.00, Difference $310.00\n\n---\n\n## Analysis & Recommendations\n\n- **Possible causes for differences:**\n    - PDF may reflect a different fiscal year, prior periods, or data snapshot not matching current JDE.\n    - Large discrepancies may have been resolved since report generation.\n    - The only current JDE issue is minor and does not relate to major accounts in the PDF.\n\n- **Corrective Actions:**\n    1. **Validate report parameters:** Ensure PDF extraction year/period matches integrity check input; if not, rerun MCP tools for correct fiscal year/period.\n    2. **Follow up on resolved issues:** Confirm what activity (journal entries, corrections) resolved large discrepancies, especially for significant accounts (4110, 1890).\n    3. **Investigate minor current discrepancy:** Drill down on vouchers with \u201cUNKNOWN\u201d GL offset to ensure integrity.\n    4. **Re-run periodically:** Rerun integrity check after any batch posting, GL updates, or corrections.\n\n---\n\n## AP Subledger vs GL Balance (Live Data, FY24, Periods 1\u201314)\n\n- **Total AP subledger found:** $310.00\n- **Total GL balance found:** $0.00\n- **Difference:** $310.00\n\n---\n\n### If you have additional report context (fiscal year/period), please provide \u2014 this will improve integrity matching.\n\n---\n\n**Summary:** Large discrepancies in PDF have been resolved in JDE (company 00001, FY24, periods 1\u201314). Only one minor discrepancy remains live. Investigate resolved discrepancies and ensure correct report parameters for full validation."
-}
+## Executive Summary
+The R007011 Unposted Batches Report for company 00060 has been analyzed. The report contains 2 unposted batches with a total unposted amount of 2476188.0.
+
+## Cross-Check Methodology
+The jde_unposted_batch_check tool was used to verify the batch data from the R007011 report against live JDE F0911 transaction data. The tool queries F0911 for batch transactions, groups by batch number, and returns per-batch summary with transaction count, total amounts, and date ranges.
+
+## Verified Batches
+The following batches from the report were verified in the live F0911 data:
+- Batch Number: 2561503, Batch Type: G, Amount: 2440373.37, Transaction Count: 2
+- Batch Number: 2561505, Batch Type: G, Amount: 33814.58, Transaction Count: 23
+
+## Amount Discrepancies
+No amount discrepancies were found between the report and the live F0911 data for the verified batches.
+
+## Missing Batches
+No batches from the report were missing in the live F0911 data.
+
+## New Batches Found
+The following new batches were found in the live F0911 data that were not in the report:
+- Batch Number: 2493577, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 27
+- Batch Number: 2331370, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331419, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331420, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331421, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331422, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331423, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331424, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331425, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331426, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331427, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331428, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331534, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331535, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331536, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331537, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331538, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331539, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331540, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331541, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331542, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331543, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331544, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331545, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331546, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331547, Batch Type: G, Company: 00004, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331548, Batch Type: G, Company: 00004, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2331549, Batch Type: G, Company: 00004, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2411202, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2411203, Batch Type: G, Company: 00001, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2548315, Batch Type: G, Company: 00002, Total Amount: 0, Transaction Count: 4
+- Batch Number: 2548321, Batch Type: G, Company: 00002, Total Amount: 0, Transaction Count: 4
+- Batch Number: 2552037, Batch Type: G, Company: 00002, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2552894, Batch Type: G, Company: 00002, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2552913, Batch Type: G, Company: 00002, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2561930, Batch Type: G, Company: 00004, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2561986, Batch Type: G, Company: 00004, Total Amount: 0, Transaction Count: 2
+- Batch Number: 2519523, Batch Type: Z, Company: 00001, Total Amount: 0, Transaction Count: 32
+- Batch Number: 2526179, Batch Type: Z, Company: 00001, Total Amount: 0, Transaction Count: 8
+- Batch Number: 2526238, Batch Type: Z, Company: 00001, Total Amount: -8961, Transaction Count: 57
+
+## Batch Analysis by Type
+The batch analysis by type is as follows:
+- G: 37 batches, total amount: 0
+- Z: 3 batches, total amount: -8961
+
+## Recommended Actions
+The recommended actions are:
+- Post the verified batches (2561503 and 2561505) to update the general ledger.
+- Investigate the new batches found in the live F0911 data to determine the cause of the discrepancy.
+- Delete any batches that are no longer needed or are duplicates.
+
+## Total Unposted Amount Summary
+The total unposted amount is 2476188.0, which includes the amounts from the verified batches (2440373.37 and 33814.58) and the new batches found in the live F0911 data.

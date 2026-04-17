@@ -12,17 +12,6 @@ import { registerDictionaryTools } from "./tools/dictionary.js";
 // Tool registrations — Generic query layer
 import { registerQueryTool } from "./tools/query.js";
 
-// Tool registrations — SO CRUD + supporting tools
-import {
-  registerSalesOrderInquiry,
-  registerCreateSalesOrder,
-  registerUpdateSalesOrder,
-  registerAddSalesOrderLine,
-  registerCancelSalesOrder,
-  registerCustomerLookup,
-  registerItemCheck,
-} from "./tools/domain.js";
-
 // Tool registrations — AP/GL Integrity tools (R047001A)
 import {
   registerApVoucherQuery,
@@ -30,6 +19,13 @@ import {
   registerGlDetailQuery,
   registerApGlIntegrityCheck,
 } from "./tools/integrity.js";
+
+// Tool registrations — Batch / Unposted Batches tools (R007011)
+import {
+  registerBatchQuery,
+  registerBatchTransactionQuery,
+  registerUnpostedBatchCheck,
+} from "./tools/batch.js";
 
 // Tool registrations — Generic orchestration (escape hatch)
 import { registerOrchestrationTool } from "./tools/orchestration.js";
@@ -44,7 +40,7 @@ import { logout } from "./services/ais-client.js";
 
 const server = new McpServer({
   name: "jde-mcp-server",
-  version: "1.1.0",
+  version: "1.2.0",
 });
 
 // ── Layer 0: Dynamic Discovery (live from JDE) ───────────────
@@ -54,24 +50,18 @@ registerSearchTables(server);          // jde_search_tables
 // ── Layer 1: Data Dictionary ──────────────────────────────────
 registerDictionaryTools(server);       // jde_dictionary_search, _list, _table
 
-// ── Layer 2: SO CRUD (curated, business-friendly) ─────────────
-registerSalesOrderInquiry(server);     // READ   — jde_sales_order_inquiry
-registerCreateSalesOrder(server);      // CREATE — jde_create_sales_order
-registerUpdateSalesOrder(server);      // UPDATE — jde_update_sales_order
-registerAddSalesOrderLine(server);     // ADD    — jde_add_sales_order_line
-registerCancelSalesOrder(server);      // DELETE — jde_cancel_sales_order
-
-// ── Layer 2.5: AP/GL Integrity (curated for R047001A) ────────
+// ── Layer 2: AP/GL Integrity (curated for R047001A) ──────────
 registerApVoucherQuery(server);        // jde_ap_voucher_query
 registerGlBalanceQuery(server);        // jde_gl_balance_query
 registerGlDetailQuery(server);         // jde_gl_detail_query
 registerApGlIntegrityCheck(server);    // jde_ap_gl_integrity_check
 
-// ── Layer 3: Supporting lookups ───────────────────────────────
-registerCustomerLookup(server);        // jde_customer_lookup
-registerItemCheck(server);             // jde_item_check
+// ── Layer 2b: Batch / Unposted Batches (R007011) ─────────────
+registerBatchQuery(server);            // jde_batch_query
+registerBatchTransactionQuery(server); // jde_batch_transaction_query
+registerUnpostedBatchCheck(server);    // jde_unposted_batch_check
 
-// ── Layer 4: Generic (fallback) ───────────────────────────────
+// ── Layer 3: Generic (fallback) ───────────────────────────────
 registerQueryTool(server);             // jde_query_table
 registerOrchestrationTool(server);     // jde_call_orchestration
 
@@ -83,7 +73,7 @@ async function runStdio(): Promise<void> {
   await loadDictionary();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("jde-mcp-server v1.1.0 running on stdio — Sales Order CRUD ready");
+  console.error("jde-mcp-server v1.2.0 running on stdio — AP/GL Integrity ready");
 
   process.on("SIGINT", async () => { await logout(); process.exit(0); });
   process.on("SIGTERM", async () => { await logout(); process.exit(0); });
@@ -106,12 +96,12 @@ async function runHTTP(): Promise<void> {
   });
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", server: "jde-mcp-server", version: "1.1.0" });
+    res.json({ status: "ok", server: "jde-mcp-server", version: "1.2.0" });
   });
 
   const port = parseInt(process.env.PORT || "3000", 10);
   app.listen(port, () => {
-    console.error(`jde-mcp-server v1.1.0 running on http://localhost:${port}/mcp`);
+    console.error(`jde-mcp-server v1.2.0 running on http://localhost:${port}/mcp`);
   });
 }
 

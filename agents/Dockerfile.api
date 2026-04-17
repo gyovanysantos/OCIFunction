@@ -2,13 +2,20 @@ FROM --platform=linux/amd64 python:3.12-slim
 
 WORKDIR /app
 
-# Install deps first (cached layer)
-COPY requirements-api.txt .
-RUN pip install --no-cache-dir -r requirements-api.txt
+# Install Java 17 (required by OpenDataLoader PDF for table extraction)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends default-jre-headless && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy both agent modules + api entry point
+# Install deps first (cached layer)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy agent modules + workflow + MCP bridge + API entry point
 COPY extractor/ ./extractor/
 COPY analyzer/  ./analyzer/
+COPY mcp_bridge.py .
+COPY workflow.py .
 COPY api.py .
 COPY __init__.py .
 

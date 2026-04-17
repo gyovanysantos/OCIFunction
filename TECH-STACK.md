@@ -1,39 +1,25 @@
 # JDE Integrity Report AI Analyzer — Tech Stack
 
-> **Last Updated**: April 11, 2025
+> **Last Updated**: April 12, 2026
 
 ---
 
-## v1.0 — OCI Serverless Function (Production)
+## OCI ADK Multi-Agent Architecture
+
+### OCI ADK Agent Layer
 
 | Component | Technology | Version | Why |
 |-----------|-----------|---------|-----|
-| **Runtime** | Python | 3.11 | Matches OCI Functions base image; mature ecosystem for data processing |
-| **Function Framework** | OCI FDK (`fdk`) | >= 0.1.105 | Required for OCI Functions deployment — provides the `handler(ctx, data)` entry point pattern |
-| **OCI SDK** | `oci` Python SDK | >= 2.168.0 | Official Oracle SDK for Object Storage downloads and GenAI inference calls |
-| **PDF Extraction** | `pypdf` | >= 4.0.0 | Pure-Python PDF reader — no native dependencies, works in any container; extracts text from all pages |
-| **LLM** | Google Gemini 2.5 Flash | On-demand (OCI) | Massive context window (~1M tokens) handles 50+ page reports; Flash variant is cost-efficient and fast |
-| **Container** | Docker | fnproject/python:3.11 | OCI Functions requires fn-project base images for packaging |
-| **API Gateway** | OCI API Gateway | — | HTTPS termination, routing, and rate limiting for the function endpoint |
-| **Object Storage** | OCI Object Storage | — | Stores Integrity Report PDFs uploaded by JDE Orchestrations |
-
----
-
-## v2.0 — Multi-Agent Architecture (In Development)
-
-### Foundry Agent Layer
-
-| Component | Technology | Version | Why |
-|-----------|-----------|---------|-----|
-| **Agent Framework** | Microsoft Agent Framework | `agent-framework-core==1.0.0rc3`, `agent-framework-azure-ai==1.0.0rc3` | Official Microsoft framework for building hosted agents with tool support, workflows, and streaming |
-| **Hosting Adapter** | `azure-ai-agentserver-agentframework` | `1.0.0b16` | Wraps agents as HTTP services (port 8088) for Foundry Agent Service deployment |
-| **Azure Identity** | `azure-identity` | >= 1.17.0 | Async `DefaultAzureCredential` for Foundry authentication (local dev + managed identity in production) |
-| **Runtime** | Python | 3.12 | Required for agent-framework SDK; latest stable Python |
-| **LLM (Agents)** | Azure OpenAI (e.g. GPT-4o) | Via Foundry deployment | Model for agent reasoning — configured via `FOUNDRY_MODEL_DEPLOYMENT_NAME` |
-| **Container** | Docker | python:3.12-slim | Slim image for Foundry Agent Service deployment |
-| **API Framework** | FastAPI | >= 0.115.0 | Async REST wrapper for agent pipeline — exposes v1.0 JDE Orchestration contract (`POST /v1/analyze`) |
-| **ASGI Server** | uvicorn | >= 0.30.0 | Production ASGI server for FastAPI (standard extras for auto-reload in dev) |
-| **Environment** | python-dotenv | >= 1.0.0 | `load_dotenv(override=False)` — env file for local dev, Foundry sets vars in production |
+| **Agent Framework** | OCI Agent Development Kit (ADK) | `oci[adk]>=2.133.0` | Official OCI framework for building agents with `@tool` decorator, `Agent`, `AgentClient`, and deterministic workflows |
+| **Agent Runtime** | OCI GenAI Agents Service | us-phoenix-1 | Server-side agent loop (LLM reasoning + tool calling) — agents are OCI-managed resources visible in Console |
+| **Auth** | OCI SDK auth | via `AgentClient` | Supports `api_key` (local dev), `instance_principal` (OCI compute) |
+| **Runtime** | Python | 3.12 | Latest stable Python; required for ADK SDK |
+| **MCP Bridge** | httpx | >= 0.27.0 | Sync HTTP client for bridging ADK `@tool` functions to MCP server via JSON-RPC over StreamableHTTP |
+| **Container** | Docker | python:3.12-slim | Slim image for OCI Container Instance / Docker Compose deployment |
+| **API Framework** | FastAPI | >= 0.115.0 | Async REST wrapper for agent pipeline — exposes JDE Orchestration contract (`POST /v1/analyze`) |
+| **ASGI Server** | uvicorn | >= 0.30.0 | Production ASGI server for FastAPI |
+| **Markdown→HTML** | markdown | >= 3.7 | Converts LLM markdown output to HTML for JDE email integration (`CL001_SimpleEmailJob`) |
+| **Environment** | python-dotenv | >= 1.0.0 | `load_dotenv(override=False)` — env file for local dev, container env vars in production |
 
 ### JDE MCP Server Layer
 
@@ -45,14 +31,14 @@
 | **Validation** | Zod | ^3.23.0 | Runtime schema validation for all MCP tool inputs — type-safe, composable, JSON Schema compatible |
 | **Language** | TypeScript | ^5.5.0 | Type safety for the 5-layer tool architecture; compiles to ESM for Node.js 22 |
 | **Container** | Docker | Alpine-based Node.js 22 | Lightweight image for Azure Container Apps deployment |
-| **Hosting** | Azure Container Apps | — | Runs MCP server (`jde-mcp-integrity`) and API wrapper (`jde-integrity-api`) as always-on HTTP services |
+| **Hosting** | Docker Compose / OCI Container Instance | — | Runs MCP server alongside the API container; can be deployed as OCI Container Instance in production |
 
 ### Cross-Cutting
 
 | Component | Technology | Version | Why |
 |-----------|-----------|---------|-----|
 | **OCI SDK (Agents)** | `oci` Python SDK | >= 2.133.0 | ExtractorAgent downloads PDFs from OCI Object Storage using API key auth |
-| **PDF Extraction** | `pypdf` | >= 4.0.0 | Same library used in v1.0 — pure Python, no native deps |
+| **PDF Extraction** | `pypdf` | >= 4.0.0 | Pure Python, no native deps |
 | **JDE AIS** | JDE AIS REST API | — | JDE EnterpriseOne Application Interface Services — the MCP server queries F0411, F0902, F0901 tables via HTTP Data Service |
 | **Version Control** | Git (subtree) | — | JDE MCP server is included as a `git subtree` from `gyovanysantos/jde-mcp-server-template` |
 
@@ -65,11 +51,8 @@
 | **F0411** | A/P Ledger (voucher pay items) | `jde_ap_voucher_query`, `jde_ap_gl_integrity_check` |
 | **F0902** | Account Balances (period amounts) | `jde_gl_balance_query`, `jde_ap_gl_integrity_check` |
 | **F0901** | Account Ledger (journal entries) | `jde_gl_detail_query` |
-| F4211 | Sales Order Detail (line items) | Existing SO CRUD tools |
-| F4201 | Sales Order Header | Existing SO CRUD tools |
-| F0101 | Address Book Master | Customer lookup |
-| F4101 | Item Master | Item check |
-| F41021 | Item Location | Item availability |
+| F0101 | Address Book Master | Generic query |
+| F4101 | Item Master | Generic query |
 
 ---
 
@@ -77,10 +60,9 @@
 
 | Decision | Rationale |
 |----------|-----------|
-| **Direct LLM inference (v1.0)** | No RAG, no Knowledge Bases — each report is self-contained and fits within the LLM context window |
-| **Gemini 2.5 Flash for v1.0** | Cost-efficient, fast, 1M token context — ideal for large PDF analysis on OCI |
-| **Azure OpenAI for v2.0 agents** | Required by Foundry Agent Service; GPT-4o provides excellent reasoning for multi-step tool use |
+| **OCI ADK for agents** | Native OCI agent framework; manages agent loop server-side, supports deterministic workflows, all infrastructure in one cloud |
 | **MCP for JDE integration** | Open standard for LLM tool calling; enables the AnalyzerAgent to query live JDE data without custom integration code |
+| **MCP Bridge pattern** | ADK has no native MCP support; `@tool` functions in `mcp_bridge.py` call MCP server via httpx (JSON-RPC) |
 | **Git subtree (not submodule)** | Subtree keeps the MCP server code inline — easier to modify, no submodule init required for contributors |
 | **Separate agents (not monolith)** | ExtractorAgent and AnalyzerAgent have different concerns (PDF processing vs. data cross-reference) — separation enables independent testing and iteration |
-| **OCI SDK for PDF access** | Simplest approach — reuses existing `~/.oci/config` pattern from v1.0; no need to mirror PDFs to Azure |
+| **OCI SDK for PDF access** | Simplest approach — reuses existing `~/.oci/config` pattern; no cross-cloud concerns |
