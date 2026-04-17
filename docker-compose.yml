@@ -58,8 +58,8 @@ services:
       EXTRACTOR_AGENT_ENDPOINT_ID: ${EXTRACTOR_AGENT_ENDPOINT_ID}
       ANALYZER_AGENT_ENDPOINT_ID: ${ANALYZER_AGENT_ENDPOINT_ID}
       # OCI Object Storage (PDF downloads)
-      OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
-      OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
+      OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-agent-knowledge-base}
+      OCI_NAMESPACE: ${OCI_NAMESPACE:-axzkbtajofjq}
       # MCP server URL (Docker internal network)
       MCP_SERVER_URL: http://mcp:3000/mcp
       # ADK debug logging (set to DEBUG for tool traces)

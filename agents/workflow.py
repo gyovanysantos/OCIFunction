@@ -14,6 +14,7 @@ import os
 from oci.addons.adk import Agent, AgentClient
 
 from extractor.agent import download_and_extract_pdf, EXTRACTOR_INSTRUCTIONS
+import extractor.agent as extractor_module
 from mcp_bridge import (
     jde_ap_voucher_query,
     jde_gl_balance_query,
@@ -117,8 +118,11 @@ def run_extractor(object_name: str) -> str:
     _ensure_event_loop()
     _ensure_agents()
     logger.info(f"ExtractorAgent: processing {object_name}")
+    # Set fallback so the tool works even if OCI GenAI passes null arguments
+    extractor_module._current_object_name = object_name
     response = _extractor.run(
-        f"Please download and extract the PDF: {object_name}"
+        f"Please download and extract the PDF: {object_name}",
+        delete_session=True,
     )
     text = response.output
     if not text:
@@ -137,7 +141,8 @@ def run_analyzer(extractor_text: str) -> str:
     _ensure_agents()
     logger.info("AnalyzerAgent: starting cross-reference analysis...")
     response = _analyzer.run(
-        f"Analyze this extraction from the JDE Integrity Report:\n\n{extractor_text}"
+        f"Analyze this extraction from the JDE Integrity Report:\n\n{extractor_text}",
+        delete_session=True,
     )
     text = response.output
     if not text:

@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────
 # OCI Object Storage configuration (matches func.py / quickstart.py)
 # ──────────────────────────────────────────────────────────────
-BUCKET_NAME = os.getenv("OCI_BUCKET_NAME", "OBJECTSTORAGE")
-NAMESPACE = os.getenv("OCI_NAMESPACE", "idxoqn0ijjyv")
+BUCKET_NAME = os.getenv("OCI_BUCKET_NAME", "agent-knowledge-base")
+NAMESPACE = os.getenv("OCI_NAMESPACE", "axzkbtajofjq")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -103,9 +103,9 @@ def _extract_with_opendataloader(pdf_bytes: bytes) -> str:
     if not full_text.strip():
         raise RuntimeError("OpenDataLoader produced empty output")
 
-    # Truncate to reduce LLM processing time
-    if len(full_text) > 8000:
-        full_text = full_text[:8000] + f"\n\n[... truncated, {len(full_text)} total chars ...]"
+    # Truncate to reduce LLM processing time (50K chars ≈ ~12K tokens, within LLM limits)
+    if len(full_text) > 50000:
+        full_text = full_text[:50000] + f"\n\n[... truncated, {len(full_text)} total chars ...]"
     logger.info(f"OpenDataLoader extracted {len(full_text)} chars")
     return full_text
 
@@ -119,9 +119,10 @@ def _extract_with_pypdf(pdf_bytes: bytes) -> str:
         if text.strip():
             pages.append(f"--- Page {i + 1} ---\n{text}")
     full_text = "\n\n".join(pages) if pages else "No text content found in PDF."
-    # Truncate to reduce LLM processing time (keep first 6000 chars)
-    if len(full_text) > 6000:
-        full_text = full_text[:6000] + f"\n\n[... truncated, {len(full_text)} total chars, {len(reader.pages)} pages ...]"
+    logger.info(f"pypdf extracted {len(full_text)} chars from {len(reader.pages)} pages")
+    # Truncate to reduce LLM processing time (50K chars ≈ ~12K tokens, within LLM limits)
+    if len(full_text) > 50000:
+        full_text = full_text[:50000] + f"\n\n[... truncated, {len(full_text)} total chars, {len(reader.pages)} pages ...]"
     return full_text
 
 
@@ -132,6 +133,10 @@ def _extract_with_pypdf(pdf_bytes: bytes) -> str:
 # Cache to avoid re-downloading/re-extracting on repeated tool calls
 _pdf_cache: dict[str, str] = {}
 
+# Fallback: OCI GenAI sometimes calls the tool with null arguments.
+# The workflow sets this before agent.run() so the tool can recover.
+_current_object_name: str | None = None
+
 @tool
 def download_and_extract_pdf(object_name: str) -> str:
     """Download a PDF from OCI Object Storage and extract its full text.
@@ -140,6 +145,12 @@ def download_and_extract_pdf(object_name: str) -> str:
         object_name: The name of the PDF file in the OCI bucket
                      (e.g. 'R047001A_ZJDE0001_588_PDF.pdf').
     """
+    # OCI GenAI sometimes passes null/empty — fall back to workflow-provided name
+    if not object_name and _current_object_name:
+        logger.warning(f"Tool received empty object_name, using fallback: {_current_object_name}")
+        object_name = _current_object_name
+    if not object_name:
+        return "ERROR: No object_name provided. Please specify the PDF filename."
     if object_name in _pdf_cache:
         return _pdf_cache[object_name]
     pdf_bytes = _download_pdf(object_name)
@@ -180,106 +191,164 @@ Example: `R007011_SCH0001_32189_PDF.pdf` → Report R007011, version SCH0001, jo
 
 ## Report Type: R047001A (A/P to G/L Integrity)
 
-IMPORTANT: Extract ALL values from the ACTUAL PDF text. Do NOT copy example values below.
+WARNING: The JSON below is a COMPLETED EXAMPLE with fake data.
+DO NOT COPY these values. Extract REAL values from the PDF text you downloaded.
 
 ```json
 {
   "report_type": "R047001A",
   "report_description": "A/P to G/L Integrity Report",
-  "report_version": "<from filename>",
+  "report_version": "SCH0001",
   "has_data": true,
-  "company": "<from PDF content, NOT filename>",
+  "company": "00060",
   "fiscal_year": 2026,
   "periods": [1, 2, 3],
   "discrepancies": [
     {
-      "gl_offset": "<extract from PDF>",
-      "account": "<extract from PDF>",
-      "ap_amount": 0.00,
-      "gl_amount": 0.00,
-      "difference": 0.00,
-      "description": "<describe the discrepancy from PDF data>"
+      "gl_offset": "PC",
+      "account": "1110",
+      "ap_amount": 125000.50,
+      "gl_amount": 124500.50,
+      "difference": 500.00,
+      "description": "AP subledger exceeds GL by $500 for GL offset PC"
     }
   ],
-  "extracted_text_length": 0,
-  "page_count": 0,
-  "raw_text_summary": "Brief summary of what the report shows"
+  "extracted_text_length": 5200,
+  "page_count": 3,
+  "raw_text_summary": "3 pages showing AP to GL comparison across 5 GL offset codes"
 }
 ```
+
+REMEMBER: All values above are FAKE. Replace with REAL data from the PDF.
 
 ## Report Type: R007011 (Unposted Batches)
 
 The R007011 report lists batches that have NOT been posted to the General Ledger.
-Look for batch numbers, batch types, statuses, amounts, dates, and user IDs.
+These reports can be VERY LARGE (10+ pages, 400+ batches). You MUST scan ALL pages.
 
 IMPORTANT: Extract ALL values from the ACTUAL PDF text. Do NOT copy the example values below.
-The example uses placeholder values (NNNNNNN, XXXXX) — replace them with real data.
 
-CRITICAL — BATCH TYPE vs STATUS (these are DIFFERENT columns):
-- **batch_type** = The ICUT column. Describes WHAT the batch contains.
-  Valid values: G (General Ledger), V (Voucher), W (Time Entry), K (Receipts), I (Invoice), M (Manual Payment)
-  In the PDF, this column is usually labeled "Batch Type", "Ty", or "BT".
-- **status** = The batch lifecycle state. Describes WHERE the batch is in processing.
-  Valid values: blank/Pending, D (Approved), P (Posted), E (Error), A (In-Use)
-  In the PDF, this column is usually labeled "Batch Status", "St", or "Status".
-- "A" is a STATUS code (In-Use), NEVER a batch type.
-- "D" is a STATUS code (Approved), NEVER a batch type.
-- If you can only find one of the two, look at the column header to determine which it is.
+## R007011 Column Layout (CRITICAL):
+The PDF columns are (in order):
+1. **App** — Application code (e.g. A=A/P, P=P/O). This is NOT the batch status!
+2. **Batch Ty** — Batch Type code: G, V, N, O, IB, RB, W, K, I, M, or blank (0)
+3. **Batch Number** — 7-digit batch number (e.g. 2561503)
+4. **Batch Date** — Date in MM/DD/YYYY format
+5. **Difference Total** — Amount (negative shown with trailing minus sign like "439.28-")
+6. **Difference Documents** — Transaction count (with trailing minus)
+7. **Bal B** — Balance flag (N/Y)
+8. **Bal J** — Balance flag (N/Y)
+9. **Batch [Status]** — Status TEXT: "Approved", "In Use", "Pending" (at end of line)
+10. **User** — User ID who created the batch
+
+CRITICAL — App vs Batch Status:
+- The FIRST column "A" or "P" is the APPLICATION code, NOT the batch status
+- The BATCH STATUS is the text near the end of each line: "Approved", "In Use", "Pending"
+- Map status text: Approved→D, In Use→A, Pending→blank, Posted→P, Error→E
+
+## R007011 Output Format — TWO LEVELS:
+
+For large reports (many batches), provide BOTH:
+1. **batch_type_summary**: Group ALL batches by batch type with counts and totals
+2. **flagged_batches**: List ONLY batches that need attention (see criteria below)
+
+### Flagged Batch Criteria (MUST include):
+- Amount > $10,000 (large unposted amounts need review)
+- Status is "In Use" (stuck batches — potential system issue)
+- Status is "Pending" (never approved — may be forgotten)
+- Batch type is blank/0 (unknown type needs investigation)
+- Any anomaly (missing amounts, unusual patterns)
+
+WARNING: The JSON below is a COMPLETED EXAMPLE with fake data. 
+DO NOT COPY these values. Extract REAL values from the PDF text you downloaded.
+Every number, date, batch number, and user ID must come from the ACTUAL PDF.
 
 ```json
 {
   "report_type": "R007011",
   "report_description": "Unposted Batches Report",
-  "report_version": "<from filename>",
+  "report_version": "SCH0001",
   "has_data": true,
-  "company": "<5-digit numeric code from PDF, e.g. 00060>",
+  "company": "00060",
   "fiscal_year": 2026,
-  "periods": [1, 2, 3],
-  "unposted_batches": [
+  "batch_type_summary": [
     {
-      "batch_number": "NNNNNNN (extract real batch number from PDF)",
-      "batch_type": "G (must be one of: G, V, W, K, I, M — NOT a status code)",
-      "batch_type_description": "General Ledger, Voucher, Time Entry, Receipts, Invoice, or Manual Payment",
-      "status": "D (must be one of: blank, D, P, E, A — the batch lifecycle state)",
-      "status_description": "Pending, Approved, Posted, Error, or In-Use",
-      "amount": 0.00,
-      "transaction_count": 0,
-      "gl_date": "YYYY-MM-DD",
-      "user_id": "XXXXX (extract real user ID from PDF)",
-      "program_id": "PXXXX"
+      "batch_type": "G",
+      "batch_type_description": "General Ledger",
+      "batch_count": 245,
+      "total_amount": 523891.45,
+      "status_breakdown": {"Approved": 240, "In Use": 3, "Pending": 2}
+    },
+    {
+      "batch_type": "V",
+      "batch_type_description": "Voucher",
+      "batch_count": 180,
+      "total_amount": 312456.78,
+      "status_breakdown": {"Approved": 178, "In Use": 1, "Pending": 1}
+    }
+  ],
+  "flagged_batches": [
+    {
+      "batch_number": "2561503",
+      "batch_type": "G",
+      "status": "In Use",
+      "amount": 45231.00,
+      "gl_date": "2026-01-15",
+      "user_id": "JSMITH",
+      "flag_reason": "Stuck in In Use status"
+    },
+    {
+      "batch_number": "2558901",
+      "batch_type": "V",
+      "status": "Approved",
+      "amount": 28750.00,
+      "gl_date": "2025-11-20",
+      "user_id": "KJONES",
+      "flag_reason": "Large amount over $10K"
     }
   ],
   "summary": {
-    "total_unposted_batches": 0,
-    "total_unposted_amount": 0.00,
-    "batch_types_found": [],
-    "date_range": "start to end"
+    "total_unposted_batches": 425,
+    "total_unposted_amount": 836348.23,
+    "batch_types_found": ["G", "V", "N", "O"],
+    "date_range": "2025-06-15 to 2026-04-10",
+    "batches_flagged": 12
   },
-  "extracted_text_length": 0,
-  "page_count": 0,
-  "raw_text_summary": "Brief summary of what the report shows"
+  "extracted_text_length": 34800,
+  "page_count": 14,
+  "raw_text_summary": "14 pages of unposted batches across types G, V, N, O with 425 total batches"
 }
 ```
 
-CRITICAL: Every value in unposted_batches MUST come from the actual PDF text.
-Parse each line of the report to extract: batch number, type, status, amount, date, user.
-```
+REMEMBER: Every value above (batch numbers, amounts, counts, dates, user IDs) is FAKE.
+You MUST replace ALL values with REAL data extracted from the PDF text.
+- batch_count must be the REAL count from scanning ALL pages
+- total_amount must be the REAL sum from the PDF
+- flagged_batches must contain REAL batch numbers from the PDF
+- extracted_text_length must be the actual character count of the PDF text
+
+CRITICAL: You MUST scan EVERY page of the PDF to count ALL batches.
+Do NOT stop at page 1-2. The batch_type_summary totals must match the actual PDF data.
 
 ### Batch Type Codes:
 - G = General Ledger
 - V = Voucher (Accounts Payable)
+- N = Notes Payable
+- O = Purchase Order / Other
+- IB = Intercompany Batch
+- RB = Recurring Batch
 - W = Time Entry
 - K = Receipts (Cash Receipts)
 - I = Invoice Entry (Accounts Receivable)
 - M = Manual Payment
-- O = Other
+- blank/0 = Unknown (flag these!)
 
-### Batch Status Codes:
-- blank = Pending
-- D = Approved
-- P = Posted
-- E = Error
-- A = In-Use
+### Batch Status Mapping:
+- "Approved" → D (ready to post)
+- "In Use" → A (locked — potential stuck batch)
+- "Pending" → blank (never approved)
+- "Posted" → P (should not appear on unposted report — anomaly!)
+- "Error" → E (posting failed)
 
 ## Fiscal Year Extraction (CRITICAL):
 - fiscal_year MUST be a 4-digit number: 2026, 2025, etc. (NOT 2-digit like 26)
@@ -311,7 +380,8 @@ Parse each line of the report to extract: batch number, type, status, amount, da
 - If the PDF has no data (just headers/footers), set `has_data: false` and empty arrays
 - If you can't determine a field, use null — EXCEPT fiscal_year when has_data is true
 - For R047001A: the `discrepancies` array should contain ALL mismatches found
-- For R007011: the `unposted_batches` array should contain ALL unposted batches found
+- For R007011: provide `batch_type_summary` with totals per type AND `flagged_batches` for notable items
+- For R007011: scan ALL pages — do NOT stop after the first 1-2 pages
 - GLPT (GL Offset) is the key field for R047001A grouping
 - Batch Number (ICU) is the key field for R007011
 - fiscal_year MUST be a 4-digit number (e.g. 2026, not 26)
