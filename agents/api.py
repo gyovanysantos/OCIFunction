@@ -88,62 +88,52 @@ def _parse_report_info(object_name: str) -> tuple[str, str]:
     return report_type, company
 
 
-_HTML_TEMPLATE = """\
-<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#1a365d">
-<tr>
-<td>
-  <table width="100%" cellpadding="8" cellspacing="0">
-  <tr>
-    <td><font color="#ffffff" size="5"><b>JDE Integrity Analysis</b></font><br>
-      <font color="#bee3f8" size="2">{report_type} - {company}</font>
-    </td>
-    <td align="right" valign="top">
-      {status_badge}
-    </td>
-  </tr>
-  </table>
-</td>
-</tr>
-</table>
-<table width="100%" cellpadding="8" cellspacing="0" bgcolor="#ffffff">
-<tr>
-<td>
-  {body_html}
-</td>
-</tr>
-</table>
-<table width="100%" cellpadding="4" cellspacing="0">
-<tr>
-<td><hr></td>
-</tr>
-<tr>
-<td><font color="#a0aec0" size="1">
-  Generated {timestamp} | JDE AI Integrity Analyzer v2.0
-</font></td>
-<td align="right"><font color="#a0aec0" size="1">
-  Cantex, Inc.
-</font></td>
-</tr>
-</table>"""
+_HTML_TEMPLATE = (
+    '<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#1a365d">'
+    "<tr><td>"
+    '<table width="100%" cellpadding="4" cellspacing="0">'
+    "<tr>"
+    '<td><font color="#ffffff" size="5"><b>JDE Integrity Analysis</b></font>'
+    '<br><font color="#bee3f8" size="2">{report_type} - {company}</font></td>'
+    '<td align="right" valign="top">{status_badge}</td>'
+    "</tr></table>"
+    "</td></tr></table>"
+    '<table width="100%" cellpadding="4" cellspacing="0" bgcolor="#ffffff">'
+    "<tr><td>{body_html}</td></tr></table>"
+    '<table width="100%" cellpadding="2" cellspacing="0">'
+    "<tr><td><hr></td></tr>"
+    "<tr>"
+    '<td><font color="#a0aec0" size="1">'
+    "Generated {timestamp} | JDE AI Integrity Analyzer v2.0"
+    "</font></td>"
+    '<td align="right"><font color="#a0aec0" size="1">'
+    "Cantex, Inc.</font></td>"
+    "</tr></table>"
+)
 
 _BADGE_ISSUES = '<font color="#cc0000"><b>[ISSUES FOUND]</b></font>'
 _BADGE_CLEAR = '<font color="#228B22"><b>[ALL CLEAR]</b></font>'
 
 
 def _sanitize_html_for_jde(html: str) -> str:
-    """Convert markdown-generated HTML to JDE-safe tags.
+    """Convert markdown-generated HTML to JDE-safe tags with minimal spacing.
 
     JDE's CL001_SimpleEmailJob rejects style= attributes and many
     modern HTML tags. This converts to basic tags only:
-    table, tr, td, th, p, b, i, br, hr, font, ul, ol, li.
+    table, tr, td, th, b, i, br, hr, font, ul, ol, li.
+
+    Also removes <p> tags (which add large default margins in email
+    clients) and replaces them with <br> line breaks for compact output.
     """
     import re as _re
     # Strip all style= attributes from any tag
     html = _re.sub(r'\s+style="[^"]*"', '', html)
-    # Replace heading tags with bold font
-    html = _re.sub(r'<h1[^>]*>(.*?)</h1>', r'<p><font size="4"><b>\1</b></font></p>', html)
-    html = _re.sub(r'<h2[^>]*>(.*?)</h2>', r'<p><font size="3"><b>\1</b></font></p>', html)
-    html = _re.sub(r'<h3[^>]*>(.*?)</h3>', r'<p><b>\1</b></p>', html)
+    # Replace heading tags with bold font + single line break (no <p> wrapper)
+    html = _re.sub(r'<h1[^>]*>(.*?)</h1>', r'<br><br><font size="4"><b>\1</b></font><br>', html)
+    html = _re.sub(r'<h2[^>]*>(.*?)</h2>', r'<br><br><font size="3"><b>\1</b></font><br>', html)
+    html = _re.sub(r'<h3[^>]*>(.*?)</h3>', r'<br><br><b>\1</b><br>', html)
+    # Replace <p> tags with content + line break (removes paragraph margins)
+    html = _re.sub(r'<p>(.*?)</p>', r'\1<br>', html, flags=_re.DOTALL)
     # Replace <strong> with <b>
     html = html.replace('<strong>', '<b>').replace('</strong>', '</b>')
     # Replace <em> with <i>
@@ -157,6 +147,17 @@ def _sanitize_html_for_jde(html: str) -> str:
     # Strip <pre> tags (keep content)
     html = _re.sub(r'<pre[^>]*>', '', html)
     html = html.replace('</pre>', '')
+    # Collapse 3+ consecutive <br> tags into two (keeps intentional spacing)
+    html = _re.sub(r'(<br\s*/?>[\s\n]*){3,}', '<br><br>', html)
+    # Strip leading <br> at the very start of body
+    html = _re.sub(r'^\s*<br\s*/?>', '', html)
+    # Convert markdown-style list items that survived inside paragraphs
+    # (markdown lib doesn't convert "- item" when mixed with paragraph text)
+    html = _re.sub(r'\n- ', '<br>- ', html)
+    # Collapse extra whitespace (newlines, multiple spaces) into single space
+    html = _re.sub(r'\s+', ' ', html)
+    # But preserve line breaks as actual <br> (not collapsed)
+    html = html.strip()
     return html
 
 
