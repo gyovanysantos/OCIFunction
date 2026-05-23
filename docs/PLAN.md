@@ -1,10 +1,11 @@
-# OCI GenAI — JDE Integrity Report Analyzer (Direct LLM Inference)
+# JDE Integrity Report AI Analyzer — Multi-Agent Architecture (OCI ADK)
 
 ## Summary
-OCI Function that analyzes JDE Integrity Reports stored in Object Storage.
-Downloads the PDF directly, extracts text with pypdf, checks for content (code-based checker),
-and sends the full document text to OCI GenAI Inference API (google.gemini-2.5-flash) for analysis.
-No Agent or Knowledge Base — direct LLM inference with the document text in the prompt.
+Multi-agent system using OCI Agent Development Kit (ADK) that analyzes JDE Integrity Reports.
+ExtractorAgent downloads PDF from OCI Object Storage, extracts text with pypdf, and produces structured JSON.
+AnalyzerAgent cross-references findings against live JDE data via MCP tools.
+
+> **Note**: v1.0 (OCI Function with direct LLM inference) has been deprecated and removed. Historical logs below are preserved for reference.
 
 ---
 

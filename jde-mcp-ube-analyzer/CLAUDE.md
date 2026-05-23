@@ -67,22 +67,22 @@ CREATE A MEMORY.md to save project context so you pick up where you left off
 
 ## Overview
 
-TypeScript MCP (Model Context Protocol) server bridging Claude to JD Edwards EnterpriseOne via the AIS REST API. Implements Sales Order CRUD operations through a 4-layer tool architecture.
+TypeScript MCP (Model Context Protocol) server bridging AI agents to JD Edwards EnterpriseOne via the AIS REST API. Implements AP/GL Integrity analysis tools and generic JDE queries through a 4-layer tool architecture.
 
 ## Architecture
 
 ```
-User → Claude (reasoning) → MCP Server → AIS / Orchestrations → JDE
+Agent → MCP Server → AIS REST API → JDE EnterpriseOne
 ```
 
 **4-layer tool design:**
 
 | Layer | Purpose | Examples |
 |-------|---------|---------|
-| 1 – Discovery | Data dictionary lookups | `jde_dictionary_search`, `_list`, `_table` |
-| 2 – Curated | SO CRUD with business rules | `jde_sales_order_inquiry`, `jde_create_sales_order` |
-| 3 – Supporting | Validation & availability | `jde_customer_lookup`, `jde_item_check` |
-| 4 – Generic | Escape hatch for any table/orch | `jde_query_table`, `jde_call_orchestration` |
+| 0 – Discovery | Live table structure from JDE | `jde_discover_table`, `jde_search_tables` |
+| 1 – Dictionary | Curated data dictionary lookups | `jde_dictionary_search`, `_list`, `_table` |
+| 2 – Curated | AP/GL Integrity analysis (R047001A) | `jde_ap_voucher_query`, `jde_ap_gl_integrity_check` |
+| 3 – Generic | Escape hatch for any table/orch | `jde_query_table`, `jde_call_orchestration` |
 
 **Key rule:** Write operations route through orchestrations (business rules enforced). Read operations use AIS Data Service directly.
 
@@ -123,15 +123,14 @@ Required in `.env` (see `.env.example`):
 
 | Element | Pattern | Example |
 |---------|---------|---------|
-| Tool registration functions | `register{Name}()` | `registerSalesOrderInquiry()` |
-| MCP tool names | `jde_{operation}_{target}` | `jde_sales_order_inquiry` |
-| Zod schemas | `Jde{Name}Schema` | `JdeSalesOrderInquirySchema` |
-| Inferred types | `Jde{Name}Input` | `JdeSalesOrderInquiryInput` |
+| Tool registration functions | `register{Name}()` | `registerApVoucherQuery()` |
+| MCP tool names | `jde_{operation}_{target}` | `jde_ap_voucher_query` |
+| Zod schemas | `Jde{Name}Schema` | `JdeApVoucherQuerySchema` |
+| Inferred types | `Jde{Name}Input` | `JdeApVoucherQueryInput` |
 | Constants | `UPPER_SNAKE_CASE` | `DEFAULT_MAX_PAGE_SIZE` |
 | Helpers | `camelCase` | `addFilter()`, `buildConditions()` |
-| Orchestration names | `ORCH_{Operation}` | `ORCH_CreateSalesOrder` |
-| JDE tables | F-prefix + digits | `F4211`, `F0101` |
-| JDE column aliases | 2-4 uppercase chars | `DOCO`, `AN8`, `LITM` |
+| JDE tables | F-prefix + digits | `F0411`, `F0901`, `F0911` |
+| JDE column aliases | 2-4 uppercase chars | `DOCO`, `AN8`, `GLPT` |
 
 ### Project Structure
 
@@ -143,17 +142,17 @@ src/
   schemas/
     tools.ts             # All Zod input schemas for MCP tools
   services/
-    ais-client.ts        # AIS REST client — token mgmt, data/form/orch calls
+    ais-client.ts        # AIS REST client — token mgmt, data/orch calls
+    dd-discovery.ts      # Live table discovery via F9210/F9200
     dictionary.ts        # Dictionary service — load, search, list, resolve columns
-    orch-mapper.ts       # Maps tool inputs → orchestration payloads
   tools/
     dictionary.ts        # Layer 1 — dictionary tool registrations
-    domain.ts            # Layer 2+3 — SO CRUD + lookup tool implementations
-    query.ts             # Layer 4 — generic table query tool
-    orchestration.ts     # Layer 4 — generic orchestration caller tool
+    discovery.ts         # Layer 0 — dynamic table discovery tools
+    integrity.ts         # Layer 2 — AP/GL integrity tools (R047001A)
+    query.ts             # Layer 3 — generic table query tool
+    orchestration.ts     # Layer 3 — generic orchestration caller tool
   data/
-    dictionary.json      # Curated data dictionary (F4211, F4201, F0101, F4101, F41021)
-    orchestrations.json  # SO CRUD operation → orchestration name + field mapping
+    dictionary.json      # Curated data dictionary
 ```
 
 **Dependency flow:** `index.ts` → `tools/*` → `schemas/tools.ts` + `services/*` → `constants.ts` + `types.ts`
@@ -164,21 +163,13 @@ src/
 
 1. Add Zod schema in `src/schemas/tools.ts` with `.strict()` and descriptive field comments
 2. Export inferred input type: `export type JdeNewToolInput = z.infer<typeof JdeNewToolSchema>`
-3. Implement `registerNewTool(server)` in `src/tools/domain.ts` (or new file for a different domain)
+3. Implement `registerNewTool(server)` in `src/tools/integrity.ts` (or new file for a different domain)
 4. Register in `src/index.ts` within the appropriate layer
 5. Set correct MCP annotations (read-only vs destructive)
-
-### Adding a new orchestration-backed write operation
-
-1. Add operation config to `src/data/orchestrations.json` with `orchestrationName` and `inputMapping`
-2. Add the operation string to the `OrchOperation` union type in `src/services/orch-mapper.ts`
-3. Create Zod schema, implement tool, register — same as above
-4. Use `buildOrchestrationPayload()` + `callOrchestration()` in the handler
 
 ### Error handling
 
 - Tool handlers return `{ content: [{ type: "text", text }], isError: true }` on failure
-- Use `orchError(e)` / `orchResult(data)` helpers in `domain.ts`
 - Direct users to `jde_dictionary_search` when queries fail on unknown columns
 
 ### AIS query filters
@@ -187,7 +178,6 @@ Use the `AisOperator` enum values: `EQUAL`, `NOT_EQUAL`, `LESS`, `GREATER`, `BET
 
 ## Pitfalls
 
-- `orchestrations.json` contains **placeholder** orchestration names — update to match actual orchestrations built in Orchestrator Studio before use
 - AIS tokens expire after ~30 min; the client auto-refreshes at 25 min but long-idle sessions may need manual re-auth
 - `CHARACTER_LIMIT` truncation can silently drop data on large result sets — prefer filtering over broad queries
 - Build copies `src/data/` → `dist/data/` via `shx` — JSON data files are not compiled by tsc

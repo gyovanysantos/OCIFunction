@@ -18,28 +18,6 @@ const FilterSchema = z.object({
     .describe("Value(s) to filter on. Use array for LIST/BETWEEN operators"),
 }).strict();
 
-// ── Order Line (reused in create and update) ──────────────────
-
-const OrderLineSchema = z.object({
-  itemNumber: z.string()
-    .describe("Item number (LITM), e.g. 'ABC123'"),
-  quantity: z.number()
-    .positive()
-    .describe("Quantity to order"),
-  unitPrice: z.number()
-    .optional()
-    .describe("Override unit price. Omit to use JDE pricing (advanced price / base price)."),
-  lineType: z.string()
-    .default("S")
-    .describe("Line type: S=Stock (default), B=Bulk, N=Non-Stock, F=Freight"),
-  requestedDate: z.string()
-    .optional()
-    .describe("Requested delivery date for this line (YYYY-MM-DD). Defaults to header date."),
-  branchPlant: z.string()
-    .optional()
-    .describe("Branch/plant override for this line. Defaults to header branch."),
-}).strict();
-
 // ──────────────────────────────────────────────────────────────
 // Data Dictionary Tools
 // ──────────────────────────────────────────────────────────────
@@ -71,135 +49,6 @@ export const JdeQueryTableSchema = z.object({
     .describe("Optional filter conditions"),
   maxRows: z.number().int().min(1).max(500).default(50)
     .describe("Max rows to return (default 50)"),
-}).strict();
-
-// ──────────────────────────────────────────────────────────────
-// READ — Sales Order Inquiry
-// ──────────────────────────────────────────────────────────────
-
-export const JdeSalesOrderInquirySchema = z.object({
-  orderNumber: z.number().int().optional()
-    .describe("Sales order number (DOCO)"),
-  customerNumber: z.number().int().optional()
-    .describe("Customer address book number (AN8)"),
-  customerName: z.string().optional()
-    .describe("Customer name to search. If provided, the tool first resolves AN8 from F0101."),
-  itemNumber: z.string().optional()
-    .describe("Item number to filter by (LITM)"),
-  branchPlant: z.string().optional()
-    .describe("Branch/plant code (MCU)"),
-  orderType: z.string().optional()
-    .describe("Document type filter (e.g. 'SO', 'CO', 'WO'). If omitted, returns ALL order types."),
-  statusFrom: z.string().optional()
-    .describe("Min next status (NXTR). E.g. '520' for open orders."),
-  statusTo: z.string().optional()
-    .describe("Max next status. Use '999' to include closed."),
-  includeHeader: z.boolean().default(false)
-    .describe("Also return the order header (F4201) alongside detail lines."),
-  maxRows: z.number().int().min(1).max(200).default(50)
-    .describe("Max detail lines to return"),
-}).strict();
-
-// ──────────────────────────────────────────────────────────────
-// CREATE — Sales Order
-// ──────────────────────────────────────────────────────────────
-
-export const JdeCreateSalesOrderSchema = z.object({
-  customerNumber: z.number().int()
-    .describe("Sold-to customer address book number (AN8). Required."),
-  shipToNumber: z.number().int().optional()
-    .describe("Ship-to address book number (SHAN). Defaults to customerNumber."),
-  branchPlant: z.string()
-    .describe("Default branch/plant for the order (MCU), e.g. 'M30'. Required."),
-  orderType: z.string().default("SO")
-    .describe("Document type (default 'SO')"),
-  orderDate: z.string().optional()
-    .describe("Order date (YYYY-MM-DD). Defaults to today."),
-  requestedDate: z.string().optional()
-    .describe("Requested delivery date (YYYY-MM-DD)."),
-  customerPO: z.string().optional()
-    .describe("Customer PO / reference number (VR01)."),
-  lines: z.array(OrderLineSchema).min(1).max(100)
-    .describe("Order detail lines. At least one line is required."),
-}).strict();
-
-// ──────────────────────────────────────────────────────────────
-// UPDATE — Sales Order Line
-// ──────────────────────────────────────────────────────────────
-
-export const JdeUpdateSalesOrderSchema = z.object({
-  orderNumber: z.number().int()
-    .describe("Sales order number to update (DOCO). Required."),
-  orderType: z.string().default("SO")
-    .describe("Document type (default 'SO')"),
-  orderCompany: z.string().default("00001")
-    .describe("Order company (KCOO). Default '00001'."),
-  lineNumber: z.number().int()
-    .describe("Line number to update (LNID, e.g. 1000 = line 1). Required."),
-  quantity: z.number().positive().optional()
-    .describe("New quantity ordered. Omit to leave unchanged."),
-  unitPrice: z.number().optional()
-    .describe("New unit price override. Omit to leave unchanged."),
-  requestedDate: z.string().optional()
-    .describe("New requested date (YYYY-MM-DD). Omit to leave unchanged."),
-  promisedDate: z.string().optional()
-    .describe("New promised date (YYYY-MM-DD). Omit to leave unchanged."),
-  branchPlant: z.string().optional()
-    .describe("Change branch/plant for this line."),
-}).strict();
-
-// ──────────────────────────────────────────────────────────────
-// ADD LINE — to existing Sales Order
-// ──────────────────────────────────────────────────────────────
-
-export const JdeAddSalesOrderLineSchema = z.object({
-  orderNumber: z.number().int()
-    .describe("Existing sales order number (DOCO) to add lines to. Required."),
-  orderType: z.string().default("SO")
-    .describe("Document type (default 'SO')"),
-  orderCompany: z.string().default("00001")
-    .describe("Order company (KCOO). Default '00001'."),
-  lines: z.array(OrderLineSchema).min(1).max(50)
-    .describe("New lines to add to the existing order."),
-}).strict();
-
-// ──────────────────────────────────────────────────────────────
-// DELETE / CANCEL — Sales Order or Line
-// ──────────────────────────────────────────────────────────────
-
-export const JdeCancelSalesOrderSchema = z.object({
-  orderNumber: z.number().int()
-    .describe("Sales order number to cancel (DOCO). Required."),
-  orderType: z.string().default("SO")
-    .describe("Document type (default 'SO')"),
-  orderCompany: z.string().default("00001")
-    .describe("Order company (KCOO). Default '00001'."),
-  lineNumber: z.number().int().optional()
-    .describe("Specific line to cancel (LNID, e.g. 1000). Omit to cancel the ENTIRE order."),
-  cancelReason: z.string().optional()
-    .describe("Reason code for cancellation, if your JDE setup requires one."),
-}).strict();
-
-// ──────────────────────────────────────────────────────────────
-// SUPPORTING — Customer Lookup & Item Check
-// ──────────────────────────────────────────────────────────────
-
-export const JdeCustomerLookupSchema = z.object({
-  customerNumber: z.number().int().optional()
-    .describe("Exact address book number (AN8)"),
-  name: z.string().optional()
-    .describe("Full or partial customer name to search (ALPH)"),
-  maxRows: z.number().int().min(1).max(100).default(20)
-    .describe("Max results"),
-}).strict();
-
-export const JdeItemCheckSchema = z.object({
-  itemNumber: z.string().optional()
-    .describe("Item number (LITM) — full or partial"),
-  branchPlant: z.string().optional()
-    .describe("Branch/plant to check availability at (MCU)"),
-  maxRows: z.number().int().min(1).max(100).default(20)
-    .describe("Max results"),
 }).strict();
 
 // ──────────────────────────────────────────────────────────────
@@ -249,7 +98,7 @@ export const JdeApVoucherQuerySchema = z.object({
   dateTo: z.string().optional()
     .describe("GL date range end (YYYY-MM-DD)"),
   fiscalYear: z.number().int().optional()
-    .describe("Fiscal year filter (FY), e.g. 26 for 2026"),
+    .describe("Fiscal year filter (FY), e.g. 2026"),
   period: z.number().int().min(1).max(14).optional()
     .describe("GL period filter (PN), 1-14"),
   maxRows: z.number().int().min(1).max(500).default(100)
@@ -268,7 +117,7 @@ export const JdeGlBalanceQuerySchema = z.object({
   ledgerType: z.string().default("AA")
     .describe("Ledger type: AA=Actual (default), AU=Units, CA=Budget"),
   fiscalYear: z.number().int().optional()
-    .describe("Fiscal year (FY), e.g. 26 for 2026"),
+    .describe("Fiscal year (FY), e.g. 2026"),
   maxRows: z.number().int().min(1).max(500).default(100)
     .describe("Max rows to return (default 100)"),
 }).strict();
@@ -296,7 +145,7 @@ export const JdeApGlIntegrityCheckSchema = z.object({
   company: z.string()
     .describe("Company code (CO). Required for integrity check."),
   fiscalYear: z.number().int()
-    .describe("Fiscal year to check (FY), e.g. 26 for 2026. Required."),
+    .describe("Fiscal year to check (FY), e.g. 2026. Required."),
   periodFrom: z.number().int().min(1).max(14)
     .describe("Starting period (PN). Required."),
   periodTo: z.number().int().min(1).max(14)
@@ -311,13 +160,6 @@ export const JdeApGlIntegrityCheckSchema = z.object({
 
 export type JdeDictionarySearchInput = z.infer<typeof JdeDictionarySearchSchema>;
 export type JdeQueryTableInput = z.infer<typeof JdeQueryTableSchema>;
-export type JdeSalesOrderInquiryInput = z.infer<typeof JdeSalesOrderInquirySchema>;
-export type JdeCreateSalesOrderInput = z.infer<typeof JdeCreateSalesOrderSchema>;
-export type JdeUpdateSalesOrderInput = z.infer<typeof JdeUpdateSalesOrderSchema>;
-export type JdeAddSalesOrderLineInput = z.infer<typeof JdeAddSalesOrderLineSchema>;
-export type JdeCancelSalesOrderInput = z.infer<typeof JdeCancelSalesOrderSchema>;
-export type JdeCustomerLookupInput = z.infer<typeof JdeCustomerLookupSchema>;
-export type JdeItemCheckInput = z.infer<typeof JdeItemCheckSchema>;
 export type JdeCallOrchestrationInput = z.infer<typeof JdeCallOrchestrationSchema>;
 export type JdeDiscoverTableInput = z.infer<typeof JdeDiscoverTableSchema>;
 export type JdeSearchTablesInput = z.infer<typeof JdeSearchTablesSchema>;
@@ -325,3 +167,56 @@ export type JdeApVoucherQueryInput = z.infer<typeof JdeApVoucherQuerySchema>;
 export type JdeGlBalanceQueryInput = z.infer<typeof JdeGlBalanceQuerySchema>;
 export type JdeGlDetailQueryInput = z.infer<typeof JdeGlDetailQuerySchema>;
 export type JdeApGlIntegrityCheckInput = z.infer<typeof JdeApGlIntegrityCheckSchema>;
+
+// ──────────────────────────────────────────────────────────────
+// Batch / Unposted Batches Tools (R007011 support)
+// ──────────────────────────────────────────────────────────────
+
+export const JdeBatchQuerySchema = z.object({
+  company: z.string().optional()
+    .describe("Company code (KCO)"),
+  batchNumber: z.number().int().optional()
+    .describe("Specific batch number (ICU)"),
+  batchType: z.string().optional()
+    .describe("Batch type (ICUT): G=GL, V=Voucher, W=Time Entry, K=Receipts, etc."),
+  dateFrom: z.string().optional()
+    .describe("GL date range start (YYYY-MM-DD) for DGJ (GL date)"),
+  dateTo: z.string().optional()
+    .describe("GL date range end (YYYY-MM-DD) for DGJ (GL date)"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeBatchTransactionQuerySchema = z.object({
+  batchNumber: z.number().int().optional()
+    .describe("Batch number (ICU) to retrieve transactions for"),
+  batchType: z.string().optional()
+    .describe("Batch type (ICUT): G=GL, V=Voucher, etc."),
+  company: z.string().optional()
+    .describe("Company code (KCO)"),
+  documentNumber: z.number().int().optional()
+    .describe("Document number (DOC) within the batch"),
+  fiscalYear: z.number().int().optional()
+    .describe("Fiscal year (FY)"),
+  period: z.number().int().min(1).max(14).optional()
+    .describe("GL period (PN), 1-14"),
+  maxRows: z.number().int().min(1).max(500).default(100)
+    .describe("Max rows to return (default 100)"),
+}).strict();
+
+export const JdeUnpostedBatchCheckSchema = z.object({
+  company: z.string().optional()
+    .describe("Company code (KCO). Optional filter."),
+  batchType: z.string().optional()
+    .describe("Batch type to check (ICUT): G=GL, V=Voucher. Omit for ALL types."),
+  dateFrom: z.string().optional()
+    .describe("Only check batches with GL date on or after this date (YYYY-MM-DD)"),
+  dateTo: z.string().optional()
+    .describe("Only check batches with GL date on or before this date (YYYY-MM-DD)"),
+  maxRows: z.number().int().min(1).max(500).default(200)
+    .describe("Max rows to return (default 200)"),
+}).strict();
+
+export type JdeBatchQueryInput = z.infer<typeof JdeBatchQuerySchema>;
+export type JdeBatchTransactionQueryInput = z.infer<typeof JdeBatchTransactionQuerySchema>;
+export type JdeUnpostedBatchCheckInput = z.infer<typeof JdeUnpostedBatchCheckSchema>;

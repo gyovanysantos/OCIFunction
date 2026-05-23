@@ -7,7 +7,7 @@
 - [x] 1.3 Create `tools/integrity.ts` with 4 curated tools
 - [x] 1.4 Register integrity tools in `index.ts`
 
-## Phase 2: Foundry Agent Development
+## Phase 2: OCI ADK Agent Development
 
 - [x] 2.1 Create `agents/` project structure (dirs, requirements.txt, .env.example)
 - [x] 2.2 Implement ExtractorAgent (PDF→structured data)
@@ -25,7 +25,7 @@
 
 - [ ] 4.1 Add HTML fancy styling on `analysisResponse` output
 - [ ] 4.2 Implement code in Cantex (JDE orchestration integration)
-- [ ] 4.3 Update Auth/API token in container — assign RBAC to managed identity for permanent auth
+- [ ] 4.3 Update Auth — configure OCI auth for production deployment
 
 ## Review
 

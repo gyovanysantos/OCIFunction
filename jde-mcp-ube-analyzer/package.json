@@ -1,7 +1,7 @@
 {
   "name": "jde-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server for JD Edwards EnterpriseOne AIS integration — hybrid data dictionary + curated tools",
+  "version": "1.2.0",
+  "description": "MCP server for JD Edwards EnterpriseOne AIS integration — AP/GL Integrity analysis + generic JDE queries",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

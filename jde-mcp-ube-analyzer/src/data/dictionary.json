@@ -1,7 +1,7 @@
 {
-  "version": "1.2.0",
-  "lastUpdated": "2026-04-11",
-  "scope": "Sales Orders (full CRUD) + Accounts Payable / General Ledger Integrity (R047001A)",
+  "version": "1.3.0",
+  "lastUpdated": "2026-04-12",
+  "scope": "Sales Orders (full CRUD) + Accounts Payable / General Ledger Integrity (R047001A) + Unposted Batches (R007011)",
   "tables": [
     {
       "tableName": "F4211",
@@ -172,6 +172,46 @@
         { "alias": "EXR",   "name": "Explanation",          "description": "Explanation / remark for the journal entry",         "dataType": "string", "example": "AP Voucher 12345" },
         { "alias": "AN8",   "name": "Address Number",       "description": "Address book number (supplier/customer)",             "dataType": "number", "example": "6001" },
         { "alias": "JELN",  "name": "Journal Entry Line",   "description": "Line number within the journal entry",               "dataType": "number", "example": "1" }
+      ]
+    },
+    {
+      "table": "F0011",
+      "description": "Batch Control — stores batch header records for GL, AP, AR, and other subsystems. Used by R007011 (Unposted Batches Report) to identify batches that have not been posted.",
+      "columns": [
+        { "alias": "ICU",   "name": "Batch Number",         "description": "Batch number — unique identifier for the batch",     "dataType": "number", "example": "7842" },
+        { "alias": "ICUT",  "name": "Batch Type",           "description": "Batch type code: G=General Ledger, V=Voucher, W=Time Entry, K=Receipts, I=Invoice, M=Manual Payment, O=Other", "dataType": "string", "example": "G" },
+        { "alias": "KCO",   "name": "Document Company",     "description": "Company that owns the batch",                        "dataType": "string", "example": "00001" },
+        { "alias": "ICUG",  "name": "Batch Status",         "description": "Batch status: blank=Pending, D=Approved, P=Posted, E=Error, A=In-Use", "dataType": "string", "example": "D" },
+        { "alias": "ISTR",  "name": "Posted Code",          "description": "Posted code: blank=Unposted, D=Posted, P=Posted. Unposted batches have this field blank.", "dataType": "string", "example": "" },
+        { "alias": "ICU1",  "name": "Batch Amount",         "description": "Total monetary amount of the batch",                 "dataType": "number", "example": "15000.00" },
+        { "alias": "ECTC",  "name": "Transaction Count",    "description": "Number of transactions in the batch",                "dataType": "number", "example": "5" },
+        { "alias": "DGL",   "name": "GL Date",              "description": "General ledger date for the batch (Julian)",          "dataType": "date",   "example": "2026-03-15" },
+        { "alias": "USER",  "name": "User ID",              "description": "User who created the batch",                         "dataType": "string", "example": "JDEUSR" },
+        { "alias": "PID",   "name": "Program ID",           "description": "Program that created the batch",                     "dataType": "string", "example": "P0911" },
+        { "alias": "ICU5",  "name": "Batch Date",           "description": "Date the batch was created (Julian)",                 "dataType": "date",   "example": "2026-03-15" }
+      ]
+    },
+    {
+      "table": "F0911",
+      "description": "Account Ledger (GL Transactions) — stores individual journal entry lines. Each row is one debit or credit line. Used with F0011 to drill into batch transaction details for R007011 analysis.",
+      "columns": [
+        { "alias": "ICU",   "name": "Batch Number",         "description": "Batch number — links to F0011.ICU",                  "dataType": "number", "example": "7842" },
+        { "alias": "ICUT",  "name": "Batch Type",           "description": "Batch type code — links to F0011.ICUT",              "dataType": "string", "example": "G" },
+        { "alias": "DOC",   "name": "Document Number",      "description": "Journal entry document number",                      "dataType": "number", "example": "12345" },
+        { "alias": "DCT",   "name": "Document Type",        "description": "Document type (JE=Journal Entry, PV=Voucher, etc.)", "dataType": "string", "example": "JE" },
+        { "alias": "KCO",   "name": "Document Company",     "description": "Company that owns the document",                     "dataType": "string", "example": "00001" },
+        { "alias": "CO",    "name": "Company",              "description": "Company code",                                       "dataType": "string", "example": "00001" },
+        { "alias": "AID",   "name": "Account ID",           "description": "Account ID (structured: company.object.subsidiary)",  "dataType": "string", "example": "00001.1110.ACME" },
+        { "alias": "OBJ",   "name": "Object Account",       "description": "Object account (natural account)",                   "dataType": "string", "example": "1110" },
+        { "alias": "SUB",   "name": "Subsidiary",           "description": "Subsidiary / sub-account",                           "dataType": "string", "example": "ACME" },
+        { "alias": "AA",    "name": "Amount",               "description": "Transaction amount (positive=debit, negative=credit)", "dataType": "number", "example": "15000.00" },
+        { "alias": "DGJ",   "name": "GL Date",              "description": "General ledger date (Julian)",                       "dataType": "date",   "example": "2026-03-15" },
+        { "alias": "FY",    "name": "Fiscal Year",          "description": "Fiscal year (2-digit in JDE, e.g. 26 for 2026)",     "dataType": "number", "example": "26" },
+        { "alias": "PN",    "name": "Period Number",        "description": "GL period number (1-14)",                            "dataType": "number", "example": "3" },
+        { "alias": "EXR",   "name": "Explanation",          "description": "Explanation / remark for the journal entry line",     "dataType": "string", "example": "Monthly accrual" },
+        { "alias": "AN8",   "name": "Address Number",       "description": "Address book number (supplier/customer)",             "dataType": "number", "example": "6001" },
+        { "alias": "JELN",  "name": "Journal Entry Line",   "description": "Line number within the journal entry",               "dataType": "number", "example": "1" },
+        { "alias": "LT",    "name": "Ledger Type",          "description": "Ledger type (AA=Actual, AU=Units, etc.)",             "dataType": "string", "example": "AA" }
       ]
     }
   ]
