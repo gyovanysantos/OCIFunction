@@ -27,6 +27,10 @@
 - [ ] 4.2 Implement code in Cantex (JDE orchestration integration)
 - [ ] 4.3 Update Auth/API token in container — assign RBAC to managed identity for permanent auth
 
+## Backlog
+
+- [ ] #2 - Enhance email report layout [`enhancement`] [`low`] — _2026-05-22_
+
 ## Review
 
 All 3 phases implemented. Summary of files created/modified:
