@@ -30,6 +30,7 @@
 ## Backlog
 
 - [ ] #2 - Enhance email report layout [`enhancement`] [`low`] — _2026-05-22_
+- [x] #4 - Refactor MCP server to Python [`enhancement`] [`medium`] — _2026-05-22_
 
 ## Review
 

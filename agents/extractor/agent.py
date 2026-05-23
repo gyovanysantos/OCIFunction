@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────
 BUCKET_NAME = os.getenv("OCI_BUCKET_NAME", "OBJECTSTORAGE")
 NAMESPACE = os.getenv("OCI_NAMESPACE", "idxoqn0ijjyv")
+LOCAL_PDF_DIR = os.getenv("LOCAL_PDF_DIR", "")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -55,7 +56,12 @@ def _get_oci_config() -> dict:
 
 
 def _download_pdf(object_name: str) -> bytes:
-    """Download a PDF from OCI Object Storage (synchronous)."""
+    """Download a PDF — from local dir if LOCAL_PDF_DIR is set and file exists, else OCI."""
+    if LOCAL_PDF_DIR:
+        local_path = os.path.join(LOCAL_PDF_DIR, os.path.basename(object_name))
+        if os.path.isfile(local_path):
+            with open(local_path, "rb") as f:
+                return f.read()
     config = _get_oci_config()
     os_client = oci.object_storage.ObjectStorageClient(config)
     obj = os_client.get_object(NAMESPACE, BUCKET_NAME, object_name)

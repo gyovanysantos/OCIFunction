@@ -17,10 +17,10 @@
 # ──────────────────────────────────────────────────────────────
 
 services:
-  # ── JDE MCP Server (TypeScript / Node.js 22) ────────────────
+  # ── JDE MCP Server (Python / FastMCP) ──────────────────────
   mcp:
     build:
-      context: ./jde-mcp-ube-analyzer
+      context: ./jde-mcp-python
       dockerfile: Dockerfile
     container_name: jde-mcp-server
     ports:
@@ -34,10 +34,10 @@ services:
       JDE_ENVIRONMENT: ${JDE_ENVIRONMENT:-JDV920}
       JDE_ROLE: ${JDE_ROLE:-*ALL}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/health')"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
     restart: unless-stopped
 
