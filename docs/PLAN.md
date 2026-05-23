@@ -94,7 +94,7 @@ No Agent or Knowledge Base — direct LLM inference with the document text in th
 ### Known Issue: GL Detail Query (F0901)
 - `jde_gl_detail_query` returns AIS error: `SPEC_NOT_FOUND` for `FY` column alias
 - The composite `jde_ap_gl_integrity_check` tool works correctly (uses F0411 + F0902)
-- Fix needed in `jde-mcp-server-template/src/tools/integrity.ts`
+- Fix needed in `jde-mcp-ube-analyzer/src/tools/integrity.ts`
 
 ---
 

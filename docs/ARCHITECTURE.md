@@ -143,7 +143,7 @@ The JDE Orchestration is configured inside JD Edwards EnterpriseOne and acts as 
 
 ## 6. JDE MCP Server
 
-The JDE MCP Server (`jde-mcp-server-template/`) is a TypeScript service that exposes JDE data as MCP tools. It queries JDE EnterpriseOne via the AIS REST API.
+The JDE MCP Server (`jde-mcp-ube-analyzer/`) is a TypeScript service that exposes JDE data as MCP tools. It queries JDE EnterpriseOne via the AIS REST API.
 
 ### 5-Layer Tool Architecture
 
@@ -291,7 +291,7 @@ OCIFunction/
 │       ├── Dockerfile               # Container (python:3.12-slim)
 │       └── requirements.txt         # Deps: agent-framework (no oci/pypdf)
 │
-├── jde-mcp-server-template/         # JDE MCP Server (git subtree)
+├── jde-mcp-ube-analyzer/            # JDE MCP Server (git subtree)
 │   └── src/
 │       ├── index.ts                 # Tool registration + HTTP transport
 │       ├── tools/integrity.ts       # 4 AP/GL integrity tools

@@ -1,13 +1,13 @@
 ## BE DIDACTIC
 You are the specialist and the user is a Junior. be didatic.
 
-## ARCHITECTURE.md
+## docs/ARCHITECTURE.md
 A ARCHITECTURE.md file should contain all the project architecure. Make sure to always update it if any changes.
 
-## TECH-STACK.md
+## docs/TECH-STACK.md
 All the Tech Stack being used on the code and its version should be on TECH-STACK.md and each component should have an explanation why it's being used. Make sure to always update it if any changes.
 
-## LEARNING.md
+## docs/LEARNING.md
 A LEARNING.md file should be updated everytime a user has a concern with the right answer. Separate the file by Topics (e.g API, libraries, packages, git)
 
 ## GIT COMMANDS

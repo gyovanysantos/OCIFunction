@@ -110,7 +110,7 @@ These files have **hardcoded** client-specific constants that must be edited dir
 
 ## 4. JDE MCP Server
 
-### `jde-mcp-server-template/src/constants.ts`
+### `jde-mcp-ube-analyzer/src/constants.ts`
 
 All JDE values are read from **environment variables** — no hardcoded client data. Defaults:
 
@@ -123,7 +123,7 @@ All JDE values are read from **environment variables** — no hardcoded client d
 | `JDE_ROLE` | `"*ALL"` | Set in `.env` if different |
 | `JDE_API_VERSION` | `"v2"` | Only change if client uses v1 AIS |
 
-### `jde-mcp-server-template/src/index.ts`
+### `jde-mcp-ube-analyzer/src/index.ts`
 
 | Item | Current Value | What to Change |
 |------|---------------|----------------|

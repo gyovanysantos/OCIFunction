@@ -188,7 +188,7 @@ Content-Type: application/json
 
 ```bash
 # Build and push
-docker build -t acrjdemcppo.azurecr.io/jde-mcp-integrity:v1 ./jde-mcp-server-template
+docker build -t acrjdemcppo.azurecr.io/jde-mcp-integrity:v1 ./jde-mcp-ube-analyzer
 docker push acrjdemcppo.azurecr.io/jde-mcp-integrity:v1
 
 # Create/update Container App
@@ -227,7 +227,7 @@ OCIFunction/
 │   └── analyzer/
 │       └── agent.py                 # MCP-powered JDE cross-reference
 │
-├── jde-mcp-server-template/         # JDE MCP Server (git subtree)
+├── jde-mcp-ube-analyzer/            # JDE MCP Server (git subtree)
 │   └── src/
 │       ├── index.ts                 # Server + transport setup
 │       ├── tools/                   # 18 MCP tools (5 layers)
@@ -291,8 +291,8 @@ JDE Batch Job → PDF → OCI Object Storage
 
 | File | Purpose |
 |------|---------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Full architecture with diagrams and deployment topology |
-| [TECH-STACK.md](TECH-STACK.md) | Every technology, version, and why it's used |
-| [DEPLOY-PLAN.md](DEPLOY-PLAN.md) | Step-by-step Azure Container Apps deployment |
-| [LESSONS.md](LESSONS.md) | Lessons learned (Agent Framework, Docker, JDE, Git) |
-| [PLAN.md](PLAN.md) | Project log — all decisions and session history |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full architecture with diagrams and deployment topology |
+| [TECH-STACK.md](docs/TECH-STACK.md) | Every technology, version, and why it's used |
+| [DEPLOY-PLAN.md](docs/DEPLOY-PLAN.md) | Step-by-step Azure Container Apps deployment |
+| [LESSONS.md](docs/LESSONS.md) | Lessons learned (Agent Framework, Docker, JDE, Git) |
+| [PLAN.md](docs/PLAN.md) | Project log — all decisions and session history |

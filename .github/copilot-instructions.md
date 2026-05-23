@@ -13,7 +13,7 @@ JDE Integrity Report Analyzer — Multi-agent architecture using Microsoft Found
 - `agents/workflow.py` — Sequential workflow: Extractor → Analyzer.
 - `agents/app.py` — Workflow orchestration entry point.
 - `agents/api.py` — FastAPI wrapper exposing `POST /v1/analyze` for JDE Orchestration compatibility.
-- `jde-mcp-server-template/` — JDE MCP Server (git subtree from `gyovanysantos/jde-mcp-server-template`).
+- `jde-mcp-ube-analyzer/` — JDE MCP Server (git subtree from `gyovanysantos/jde-mcp-server-template`).
 - `docker-compose.yml` — Local dev: 4 services (mcp, extractor, analyzer, api).
 - `.env.example` — Root env template for docker-compose.
 - `agents/.env` — Agent env vars (production MCP URL).
@@ -42,7 +42,7 @@ JDE Integrity Report Analyzer — Multi-agent architecture using Microsoft Found
 - Agents use `azure.identity.aio.DefaultAzureCredential` (async) for Foundry auth.
 - Agent framework: `agent-framework-core==1.0.0rc3`, hosting adapter `azure-ai-agentserver-agentframework==1.0.0b16`.
 - Each agent has its own `app.py`, `Dockerfile`, and `requirements.txt` for independent containers.
-- MCP tools are defined in `jde-mcp-server-template/src/tools/integrity.ts`.
+- MCP tools are defined in `jde-mcp-ube-analyzer/src/tools/integrity.ts`.
 
 ### TypeScript — JDE MCP Server
 - Node.js 22, TypeScript 5.x, MCP SDK ^1.12.0, Express ^4.21.0, Zod ^3.23.0.
@@ -63,7 +63,7 @@ JDE Integrity Report Analyzer — Multi-agent architecture using Microsoft Found
 
 ## Important Rules
 - Do NOT touch the `jde-mcp-po` Container App — it belongs to another project. Our app is `jde-mcp-integrity`.
-- When modifying MCP tools, update `jde-mcp-server-template/src/tools/integrity.ts` and rebuild the container.
+- When modifying MCP tools, update `jde-mcp-ube-analyzer/src/tools/integrity.ts` and rebuild the container.
 - Test locally with `docker compose up` before deploying to Azure.
 
 ## BE DIDACTIC

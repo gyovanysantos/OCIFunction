@@ -20,7 +20,7 @@ services:
   # ── JDE MCP Server (TypeScript / Node.js 22) ────────────────
   mcp:
     build:
-      context: ./jde-mcp-server-template
+      context: ./jde-mcp-ube-analyzer
       dockerfile: Dockerfile
     container_name: jde-mcp-server
     ports:
@@ -55,10 +55,12 @@ services:
       FOUNDRY_TOKEN: ${FOUNDRY_TOKEN:-}
       OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
       OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
+      LOCAL_PDF_DIR: ${LOCAL_PDF_DIR:-}
     volumes:
       # Mount OCI config for PDF downloads (local dev only)
       # Use USERPROFILE on Windows (HOME is not set)
       - ${USERPROFILE}/.oci:/root/.oci:ro
+      - ./data:/app/data:ro
     restart: unless-stopped
 
   # ── AnalyzerAgent (Python — MCP-powered JDE cross-reference) ─
@@ -96,8 +98,14 @@ services:
       OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-OBJECTSTORAGE}
       OCI_NAMESPACE: ${OCI_NAMESPACE:-idxoqn0ijjyv}
       MCP_SERVER_URL: http://mcp:3000/mcp
+      # Email notifications via ACS (leave blank to disable)
+      ACS_CONNECTION_STRING: ${ACS_CONNECTION_STRING:-}
+      EMAIL_NOTIFICATION_TO: ${EMAIL_NOTIFICATION_TO:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
+      LOCAL_PDF_DIR: ${LOCAL_PDF_DIR:-}
     volumes:
       - ${USERPROFILE}/.oci:/root/.oci:ro
+      - ./data:/app/data:ro
     depends_on:
       mcp:
         condition: service_healthy

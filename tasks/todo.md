@@ -32,10 +32,10 @@
 All 3 phases implemented. Summary of files created/modified:
 
 **Phase 1 — MCP Server (4 files modified/created):**
-- `jde-mcp-server-template/src/data/dictionary.json` — Added F0411 (19 cols), F0902 (23 cols), F0901 (14 cols); version bumped to 1.2.0
-- `jde-mcp-server-template/src/schemas/tools.ts` — Added 4 Zod schemas + 4 type exports
-- `jde-mcp-server-template/src/tools/integrity.ts` — **NEW** — 4 curated MCP tools for AP/GL integrity
-- `jde-mcp-server-template/src/index.ts` — Registered integrity tools as Layer 2.5
+- `jde-mcp-ube-analyzer/src/data/dictionary.json` — Added F0411 (19 cols), F0902 (23 cols), F0901 (14 cols); version bumped to 1.2.0
+- `jde-mcp-ube-analyzer/src/schemas/tools.ts` — Added 4 Zod schemas + 4 type exports
+- `jde-mcp-ube-analyzer/src/tools/integrity.ts` — **NEW** — 4 curated MCP tools for AP/GL integrity
+- `jde-mcp-ube-analyzer/src/index.ts` — Registered integrity tools as Layer 2.5
 
 **Phase 2 — Foundry Agents (9 files created):**
 - `agents/app.py` — HTTP entry point with Foundry hosting adapter
