@@ -16,6 +16,7 @@ import logging
 import signal
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -30,8 +31,17 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     name="jde-integrity-analyzer",
-    stateless_http=True,
+    stateless_http=False,
     json_response=True,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        # Accept requests from Docker network hostnames as well as localhost
+        allowed_hosts=[
+            "localhost", "localhost:3000",
+            "mcp", "mcp:3000",
+            "127.0.0.1", "127.0.0.1:3000",
+        ],
+    ),
 )
 
 # ── Register all tools ─────────────────────────────────────────────────────────
