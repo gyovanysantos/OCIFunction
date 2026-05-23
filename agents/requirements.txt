@@ -1,0 +1,22 @@
+# ──────────────────────────────────────────────────────────────
+# JDE Integrity Analyzer — Foundry Agent Dependencies
+# ──────────────────────────────────────────────────────────────
+# Microsoft Agent Framework (pre-release — pin versions!)
+agent-framework-core==1.0.0rc3
+agent-framework-azure-ai==1.0.0rc3
+
+# Foundry hosting adapter (serves HTTP on port 8088)
+azure-ai-agentserver-core==1.0.0b16
+azure-ai-agentserver-agentframework==1.0.0b16
+
+# Azure identity (async credentials for Foundry auth)
+azure-identity>=1.17.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
+
+# OCI SDK (PDF download from Object Storage)
+oci>=2.133.0
+
+# PDF text extraction
+pypdf>=4.0.0

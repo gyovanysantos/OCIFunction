@@ -1,0 +1,3 @@
+{
+  "text": "{\n  \"report_type\": null,\n  \"report_description\": null,\n  \"has_data\": false,\n  \"company\": null,\n  \"fiscal_year\": null,\n  \"periods\": [],\n  \"discrepancies\": [],\n  \"extracted_text_length\": 0,\n  \"page_count\": null,\n  \"raw_text_summary\": \"PDF extraction failed; no content available.\"\n}"
+}

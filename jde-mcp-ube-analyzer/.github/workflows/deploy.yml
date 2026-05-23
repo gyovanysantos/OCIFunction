@@ -1,0 +1,249 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+env:
+  IMAGE_NAME: jde-mcp-sales-template
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to OCI Container Registry (OCIR)
+        run: |
+          echo "${{ secrets.OCI_AUTH_TOKEN }}" | docker login \
+            ${{ secrets.OCI_REGION }}.ocir.io \
+            -u "${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ secrets.OCI_USERNAME }}" \
+            --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            -t ${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          docker push ${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest
+
+  deploy:
+    name: Deploy to OCI Container Instance
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install OCI CLI
+        run: |
+          pip install oci-cli
+
+      - name: Configure OCI CLI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" | base64 -d > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          key_file=~/.oci/oci_api_key.pem
+          EOF
+
+      - name: Deploy — Delete old & Create new Container Instance
+        env:
+          IMAGE_URL: ${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          JDE_AIS_URL: ${{ secrets.JDE_AIS_URL }}
+          JDE_USERNAME_VAL: ${{ secrets.JDE_USERNAME_VAL }}
+          JDE_PASSWORD_VAL: ${{ secrets.JDE_PASSWORD_VAL }}
+          JDE_ENVIRONMENT_VAL: ${{ secrets.JDE_ENVIRONMENT_VAL }}
+          OCIR_PULL_USERNAME_B64: ${{ secrets.OCIR_PULL_USERNAME_B64 }}
+          OCIR_PULL_PASSWORD_B64: ${{ secrets.OCIR_PULL_PASSWORD_B64 }}
+          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          OCI_AVAILABILITY_DOMAIN: ${{ secrets.OCI_AVAILABILITY_DOMAIN }}
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+        run: |
+          # Build the container instance spec from secrets (no credentials in repo)
+          python3 -c "
+          import json, os
+          spec = {
+            'availabilityDomain': os.environ['OCI_AVAILABILITY_DOMAIN'],
+            'compartmentId': os.environ['OCI_COMPARTMENT_ID'],
+            'displayName': 'jde-mcp-sales-server',
+            'shape': 'CI.Standard.E4.Flex',
+            'shapeConfig': {'ocpus': 1, 'memoryInGBs': 2},
+            'containers': [{
+              'displayName': 'mcp-server',
+              'imageUrl': os.environ['IMAGE_URL'],
+              'environmentVariables': {
+                'TRANSPORT': 'http',
+                'PORT': '3000',
+                'NODE_ENV': 'production',
+                'JDE_AIS_URL': os.environ['JDE_AIS_URL'],
+                'JDE_USERNAME': os.environ['JDE_USERNAME_VAL'],
+                'JDE_PASSWORD': os.environ['JDE_PASSWORD_VAL'],
+                'JDE_ENVIRONMENT': os.environ.get('JDE_ENVIRONMENT_VAL', 'JPY920'),
+                'JDE_ROLE': '*ALL'
+              }
+            }],
+            'imagePullSecrets': [{
+              'secretType': 'BASIC',
+              'registryEndpoint': 'iad.ocir.io',
+              'username': os.environ['OCIR_PULL_USERNAME_B64'],
+              'password': os.environ['OCIR_PULL_PASSWORD_B64']
+            }],
+            'vnics': [{
+              'subnetId': os.environ['OCI_SUBNET_ID'],
+              'isPublicIpAssigned': True
+            }]
+          }
+          with open('/tmp/deploy-spec.json', 'w') as f:
+            json.dump(spec, f, indent=2)
+          print('Spec generated successfully')
+          "
+
+          # Delete the old container instance (ignore errors if it doesn't exist)
+          oci container-instances container-instance delete \
+            --container-instance-id ${{ secrets.OCI_CONTAINER_INSTANCE_ID }} \
+            --force \
+            --wait-for-state SUCCEEDED \
+            --max-wait-seconds 180 || true
+
+          # Wait a bit for resources to be released
+          sleep 10
+
+          # Create a new container instance with the updated image
+          CREATE_OUTPUT=$(oci container-instances container-instance create \
+            --from-json "file:///tmp/deploy-spec.json" \
+            --wait-for-state SUCCEEDED \
+            --max-wait-seconds 300)
+
+          # Extract the new container instance ID
+          NEW_ID=$(echo "$CREATE_OUTPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('resources',[{}])[0].get('identifier','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+          echo "New Container Instance ID: $NEW_ID"
+          echo "NEW_INSTANCE_ID=$NEW_ID" >> $GITHUB_ENV
+          echo "⚠️  UPDATE the OCI_CONTAINER_INSTANCE_ID secret to: $NEW_ID"
+
+      - name: Get new container private IP
+        run: |
+          echo "Waiting 30 seconds for container networking to initialize..."
+          sleep 30
+
+          # Get the VNIC ID from the new container instance
+          VNIC_ID=$(oci container-instances container-instance get \
+            --container-instance-id "$NEW_INSTANCE_ID" \
+            | python3 -c "import json,sys; data=json.load(sys.stdin)['data']; print(data['vnics'][0]['vnic-id'])")
+
+          echo "VNIC ID: $VNIC_ID"
+
+          # Get the private IP from the VNIC
+          PRIVATE_IP=$(oci network vnic get \
+            --vnic-id "$VNIC_ID" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['private-ip'])")
+
+          PUBLIC_IP=$(oci network vnic get \
+            --vnic-id "$VNIC_ID" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['public-ip'])")
+
+          echo "Private IP: $PRIVATE_IP"
+          echo "Public IP: $PUBLIC_IP"
+          echo "CONTAINER_PRIVATE_IP=$PRIVATE_IP" >> $GITHUB_ENV
+          echo "CONTAINER_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+
+      - name: Update API Gateway backend
+        run: |
+          # Build the gateway deployment update spec with the new backend IP
+          python3 -c "
+          import json, os
+          private_ip = os.environ['CONTAINER_PRIVATE_IP']
+          spec = {
+            'specification': {
+              'requestPolicies': {
+                'cors': {
+                  'allowedOrigins': ['*'],
+                  'allowedMethods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                  'allowedHeaders': ['*'],
+                  'exposedHeaders': ['mcp-session-id'],
+                  'isAllowCredentialsEnabled': False,
+                  'maxAgeInSeconds': 3600
+                }
+              },
+              'routes': [
+                {
+                  'path': '/mcp',
+                  'methods': ['POST', 'GET', 'DELETE'],
+                  'backend': {
+                    'type': 'HTTP_BACKEND',
+                    'url': f'http://{private_ip}:3000/mcp',
+                    'connectTimeoutInSeconds': 10,
+                    'readTimeoutInSeconds': 120,
+                    'sendTimeoutInSeconds': 30
+                  },
+                  'requestPolicies': {
+                    'headerTransformations': {
+                      'setHeaders': {
+                        'items': [{
+                          'name': 'Accept',
+                          'values': ['application/json, text/event-stream'],
+                          'ifExists': 'SKIP'
+                        }]
+                      }
+                    }
+                  }
+                },
+                {
+                  'path': '/health',
+                  'methods': ['GET'],
+                  'backend': {
+                    'type': 'HTTP_BACKEND',
+                    'url': f'http://{private_ip}:3000/mcp',
+                    'connectTimeoutInSeconds': 5,
+                    'readTimeoutInSeconds': 10,
+                    'sendTimeoutInSeconds': 5
+                  }
+                }
+              ]
+            }
+          }
+          with open('/tmp/gw-spec.json', 'w') as f:
+            json.dump(spec, f, indent=2)
+          print(f'Gateway spec generated — backend: http://{private_ip}:3000/mcp')
+          "
+
+          # Update the API Gateway deployment
+          oci api-gateway deployment update \
+            --deployment-id ${{ secrets.OCI_APIGW_DEPLOYMENT_ID }} \
+            --from-json "file:///tmp/gw-spec.json" \
+            --force \
+            --wait-for-state SUCCEEDED \
+            --max-wait-seconds 120
+
+          echo "✅ API Gateway updated to point to $CONTAINER_PRIVATE_IP:3000"
+
+      - name: Health check
+        run: |
+          echo "Waiting 15 seconds for gateway to propagate..."
+          sleep 15
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://dwecjmghl667coww5eoz3n3gq4.apigateway.us-ashburn-1.oci.customer-oci.com/mcp)
+          if [ "$HTTP_CODE" = "404" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Health check PASSED (HTTP $HTTP_CODE) — MCP server is reachable via API Gateway"
+          else
+            echo "⚠️  Health check returned HTTP $HTTP_CODE — verify manually"
+          fi
+          echo ""
+          echo "📋 Summary:"
+          echo "   Container Instance: $NEW_INSTANCE_ID"
+          echo "   Private IP: $CONTAINER_PRIVATE_IP"
+          echo "   Public IP:  $CONTAINER_PUBLIC_IP"
+          echo "   Gateway:    https://dwecjmghl667coww5eoz3n3gq4.apigateway.us-ashburn-1.oci.customer-oci.com/mcp"

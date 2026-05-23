@@ -1,0 +1,3 @@
+{
+  "text": "No data to analyze \u2014 report was empty.\n\n**Explanation:**  \nThe ExtractorAgent has reported `has_data: false` and indicated that PDF extraction failed with no content available. There are no company, fiscal year, periods, or discrepancies provided.  \nNo MCP tool checks are possible due to lack of input data.\n\n**Next Steps:**  \n- Obtain a valid JDE Integrity Report with extractable content.\n- Retry the extraction and analysis workflow once data is available."
+}
